@@ -13,9 +13,10 @@ const Navbar = () => {
         <div className="flex items-center justify-between h-full">
           <div className="flex items-center gap-8">
             <Link to="/" className="flex items-center gap-2.5 hover:opacity-80 transition-all">
-              <div className="size-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                <SquareUserRound className="w-5 h-5 text-primary" />
+              <div className="size-9 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
+                <img src="/icon.png" alt="Avatar" className="w-8 h-8 object-cover" />
               </div>
+
               <h1 className="text-lg font-bold">VChat</h1>
             </Link>
           </div>

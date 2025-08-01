@@ -1,147 +1,85 @@
-import {create} from 'zustand';
-import { axiosInstance } from '../lib/axios.js';
-import toast from 'react-hot-toast';
-import io from 'socket.io-client';
+import { create } from "zustand";
+import toast from "react-hot-toast";
+import {
+  CognitoUser,
+  AuthenticationDetails,
+  CognitoUserPool,
+} from "amazon-cognito-identity-js";
+import { userPool } from "../lib/cognito.js"; // Đảm bảo file này đã cấu hình đúng
 
-const BASE_URL = "http://localhost:5001"
+export const useAuthStore = create((set) => ({
+  authUser: null,
+  isSigningUp: false,
+  isLoggingIng: false,
+  isCheckingAuth: true,
 
-export const useAuthStore = create((set,get) =>({
-    onlineUsers: [],
-    authUser: null,
-    isSigningUp: false,
-    isLoggingIng: false,
-    isUpdatingProfile: false,
-    socket: null,
-    isCheckingAuth: true,
+  signup: async ({ email, password }) => {
+    set({ isSigningUp: true });
 
-    checkAuth: async() =>{
-        try {
-            const res = await axiosInstance.get("/auth/check");
-            set({authUser: res.data});
-            
-            // Connect socket if user is authenticated
-            if (res.data) {
-                get().connectSocket();
-            }
-        } catch (error) {
-            console.log("Error in checkAuth: ", error);
-            set({authUser: null});
-        } finally{
-            set({isCheckingAuth: false});
+    userPool.signUp(email, password, [], null, (err, result) => {
+      if (err) {
+        toast.error(err.message || "Lỗi đăng ký");
+        set({ isSigningUp: false });
+        return;
+      }
+
+      toast.success("Đăng ký thành công. Vui lòng xác minh email");
+      set({ isSigningUp: false });
+    });
+  },
+
+  login: async ({ email, password }) => {
+    set({ isLoggingIng: true });
+
+    const authDetails = new AuthenticationDetails({
+      Username: email,
+      Password: password,
+    });
+
+    const user = new CognitoUser({
+      Username: email,
+      Pool: userPool,
+    });
+
+    user.authenticateUser(authDetails, {
+      onSuccess: (result) => {
+        toast.success("Đăng nhập thành công");
+        set({ authUser: user });
+      },
+      onFailure: (err) => {
+        toast.error("Đăng nhập thất bại");
+        console.error("Login error:", err);
+      },
+      newPasswordRequired: () => {
+        toast.error("Cần đổi mật khẩu mới");
+      },
+    });
+
+    set({ isLoggingIng: false });
+  },
+
+  logout: () => {
+    const { authUser } = useAuthStore.getState();
+    if (authUser) {
+      authUser.signOut();
+      set({ authUser: null });
+      toast.success("Đăng xuất thành công");
+    }
+  },
+
+  checkAuth: () => {
+    const currentUser = userPool.getCurrentUser();
+    if (currentUser) {
+      currentUser.getSession((err, session) => {
+        if (err || !session.isValid()) {
+          set({ authUser: null, isCheckingAuth: false });
+          return;
         }
-    },
 
-    signup: async (data) =>{
-        set({ isSigningUp: true});
-        try {
-            const res = await axiosInstance.post("/auth/signup", data);
-            set({authUser: res.data});
-            toast.success("Tạo tài khoản thành công");
-            
-            // Connect socket after successful signup
-            get().connectSocket();
-        } catch (error) {
-            toast.error(error.response.data.message);
-        } finally{
-            set({isSigningUp: false});
-        }
-    },
-
-    login: async(data) =>{
-        set({ isLoggingIng: true});
-        try {
-            const res = await axiosInstance.post("/auth/login", data);
-            set({authUser: res.data});
-            toast.success("Đăng nhập thành công");
-
-            // Connect socket after successful login
-            get().connectSocket();
-        } catch (error) {
-            toast.error("Tài khoản hoặc mật khẩu sai");
-        } finally{
-            set({isLoggingIng: false});
-        }
-    },
-
-    logout: async() =>{
-        try {
-            await axiosInstance.post("/auth/logout");
-            set({authUser: null});
-            toast.success("Đăng xuất thành công");
-            
-            // Disconnect socket before logout
-            get().disconnectSocket();
-        } catch (error) {
-            toast.error(error.response.data.message);
-        }
-    },
-
-    updateProfile: async(data) =>{
-        set({ isUpdatingProfile: true});
-        try {
-            const res = await axiosInstance.put("/auth/update-profile", data);
-            set({authUser: res.data});
-            toast.success("Cập nhật thành công");
-        } catch (error) {
-            console.log("error in update profile: ", error)
-            toast.error("Không thể cập nhật được");
-        } finally{
-            set({isUpdatingProfile: false});
-        }
-    },
-
-    connectSocket: () => {
-        const { authUser, socket } = get();
-        
-        // Don't connect if no user or socket already connected
-        if (!authUser || socket?.connected) return;
-        
-        console.log("Connecting socket for user:", authUser._id);
-        
-        const newSocket = io(BASE_URL, {
-            query: {
-                userId: authUser._id,
-            },
-        });
-
-        set({ socket: newSocket });
-
-        // Socket event listeners
-        newSocket.on("connect", () => {
-            console.log("Socket connected successfully:", newSocket.id);
-        });
-
-        newSocket.on("disconnect", () => {
-            console.log("Socket disconnected");
-        });
-
-        newSocket.on("connect_error", (error) => {
-            console.error("Socket connection error:", error);
-        });
-
-        newSocket.on("getOnlineUsers", (userIds) => {
-            console.log("Online users received:", userIds);
-            set({ onlineUsers: userIds });
-        });
-
-        // Listen for when other users come online/offline
-        newSocket.on("userConnected", (userId) => {
-            console.log("User connected:", userId);
-            set({ onlineUsers: [...get().onlineUsers, userId] });
-        });
-
-        newSocket.on("userDisconnected", (userId) => {
-            console.log("User disconnected:", userId);
-            set({ onlineUsers: get().onlineUsers.filter(id => id !== userId) });
-        });
-    },
-
-    disconnectSocket: () => {
-        const { socket } = get();
-        if (socket?.connected) {
-            console.log("Disconnecting socket");
-            socket.disconnect();
-            set({ socket: null, onlineUsers: [] });
-        }
-    },
+        set({ authUser: currentUser, isCheckingAuth: false });
+      });
+    } else {
+      set({ authUser: null, isCheckingAuth: false });
+    }
+  },
 }));

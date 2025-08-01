@@ -1,20 +1,36 @@
 import { Link } from "react-router-dom";
 import AuthImagePattern from "../components/AuthImagePattern";
 import { Eye, EyeOff, Loader2, Lock, Mail, SquareUserRound } from "lucide-react";
-import { useAuthStore } from "../store/useAuthStore";
 import { useState } from "react";
+import { loginCognito } from "../lib/cognito"; 
+import toast from "react-hot-toast";
 
 const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false); //
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
-  const { login, isLoggingIn } = useAuthStore();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    login(formData);
+    setIsLoggingIn(true);
+    try {
+      const result = await loginCognito(formData.email, formData.password);
+      toast.success("Đăng nhập thành công!");
+
+      // Ở đây có thể lưu token vào localStorage hoặc state
+      localStorage.setItem("idToken", result.getIdToken().getJwtToken());
+
+      // Điều hướng về trang chính (nếu có)
+      window.location.href = "/";
+    } catch (err) {
+      toast.error("Đăng nhập thất bại");
+      console.error(err);
+    } finally {
+      setIsLoggingIn(false);
+    }
   };
 
   return (
@@ -29,7 +45,7 @@ const LoginPage = () => {
                 className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20
               transition-colors"
               >
-                <SquareUserRound className="w-6 h-6 text-primary" />
+                
               </div>
               <h1 className="text-2xl font-bold mt-2">Chào mừng bạn</h1>
               <p className="text-base-content/60">Đăng nhập vào tài khoản</p>
@@ -105,6 +121,13 @@ const LoginPage = () => {
               </Link>
             </p>
           </div>
+          <div className="text-center">
+            <p className="text-base-content/60">
+              <Link to="/confirm-signup" className="link link-primary">
+                Xác minh tài khoản
+              </Link>
+            </p>
+          </div>
         </div>
       </div>
 
@@ -116,4 +139,5 @@ const LoginPage = () => {
     </div>
   );
 };
+
 export default LoginPage;
