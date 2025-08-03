@@ -12,6 +12,8 @@ export const useAuthStore = create((set) => ({
   isSigningUp: false,
   isLoggingIng: false,
   isCheckingAuth: true,
+  onlineUsers: [],
+  setOnlineUsers: (users) => set({ onlineUsers: users }),
 
   signup: async ({ email, password }) => {
     set({ isSigningUp: true });

@@ -36,7 +36,7 @@ const Sidebar = () => {
                         />
                         <span className="text-sm">Chỉ hiển thị đang online</span>
                     </label>
-                    <span className="text-xs text-zinc-500">({onlineUsers.length - 1} online)</span>
+                    <span className="text-xs text-zinc-500">({Math.max(onlineUsers.length - 1, 0)} online)</span>
                 </div>
 
             </div>
