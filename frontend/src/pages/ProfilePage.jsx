@@ -6,12 +6,13 @@ const ProfilePage = () => {
   const { authUser, isUpdatingProfile, updateProfile } = useAuthStore();
   const [selectedImg, setSelectedImg] = useState(null);
 
+  if (!authUser) return <p>Đang tải thông tin người dùng...</p>;
+
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
-
     reader.readAsDataURL(file);
 
     reader.onload = async () => {
@@ -91,9 +92,7 @@ const ProfilePage = () => {
                 <span>{authUser.createdAt?.split("T")[0]}</span>
               </div>
               <div className="flex items-center justify-between py-2">
-                <span>Tình trạng tài khoản</span>
-                <span className="text-green-500">Hoạt động</span>
-              </div>
+            </div>
             </div>
           </div>
         </div>

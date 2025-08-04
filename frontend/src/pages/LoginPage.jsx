@@ -4,6 +4,8 @@ import { Eye, EyeOff, Loader2, Lock, Mail, SquareUserRound } from "lucide-react"
 import { useState } from "react";
 import { loginCognito } from "../lib/cognito"; 
 import toast from "react-hot-toast";
+import { api } from "../lib/axios";
+import { avatarS3 } from "../constants/avatars3";
 
 const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -14,24 +16,79 @@ const LoginPage = () => {
   });
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsLoggingIn(true);
+  e.preventDefault();
+  setIsLoggingIn(true);
+
+  try {
+    // Đăng nhập bằng Cognito
+    const result = await loginCognito(formData.email, formData.password);
+    const idToken = result.getIdToken().getJwtToken();
+    const email = result.getIdToken().payload.email;
+    const fullName = localStorage.getItem("fullName") || email.split("@")[0];
+
+    // Lưu token vào localStorage
+    localStorage.setItem("idToken", idToken);
+
+    // Kiểm tra user đã tồn tại trong DynamoDB chưa
     try {
-      const result = await loginCognito(formData.email, formData.password);
-      toast.success("Đăng nhập thành công!");
-
-      // Ở đây có thể lưu token vào localStorage hoặc state
-      localStorage.setItem("idToken", result.getIdToken().getJwtToken());
-
-      // Điều hướng về trang chính (nếu có)
-      window.location.href = "/";
-    } catch (err) {
-      toast.error("Đăng nhập thất bại");
-      console.error(err);
-    } finally {
-      setIsLoggingIn(false);
+  await api.get("/me", {
+    headers: { Authorization: idToken }
+  });
+  console.log("User đã tồn tại trong DynamoDB");
+} catch (err) {
+  const status = err.response?.status;
+  
+  if (status === 404) {
+    // User chưa tồn tại → tạo mới
+    try {
+      await api.post("/create-user", {
+        fullName,
+        avatar: avatarS3
+      }, {
+        headers: { Authorization: idToken }
+      });
+      console.log("Đã tạo user mới trong DynamoDB");
+    } catch (createErr) {
+      toast.error(createErr.response?.data?.error || "Không thể tạo người dùng mới");
+      console.error("Lỗi khi tạo user:", createErr);
     }
-  };
+  } else if (status === 401) {
+    toast.error("Không có quyền truy cập (401)");
+    console.error("Token không hợp lệ:", err);
+  } else if (status === 500) {
+    console.warn("Server chưa có user hoặc lỗi khác - đang xử lý tạo user...");
+    try {
+      await api.post("/create-user", {
+        fullName,
+        avatar: avatarS3
+      }, {
+        headers: { Authorization: idToken }
+      });
+      console.log("Đã tạo user mới trong DynamoDB");
+    } catch (createErr) {
+      toast.error("Lỗi khi tạo user sau lỗi 500");
+      console.error("Lỗi khi tạo user:", createErr);
+    }
+  } else {
+    toast.error(err.response?.data?.error || "Lỗi không xác định");
+    console.error("Lỗi khi gọi /me:", err);
+  }
+}
+
+
+    toast.success("Đăng nhập thành công!");
+    window.location.href = "/";
+    
+  } catch (err) {
+    toast.error("Đăng nhập thất bại");
+    console.error(err);
+  } finally {
+    setIsLoggingIn(false);
+  }
+};
+
+
+
 
   return (
     <div className="h-screen grid lg:grid-cols-2">

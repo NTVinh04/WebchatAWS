@@ -1,0 +1,1 @@
+export const avatarS3 = "https://chatapp-pic.s3.ap-southeast-1.amazonaws.com/avatar.png";

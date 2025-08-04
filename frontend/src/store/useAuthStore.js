@@ -5,7 +5,7 @@ import {
   AuthenticationDetails,
   CognitoUserPool,
 } from "amazon-cognito-identity-js";
-import { userPool } from "../lib/cognito.js"; // Đảm bảo file này đã cấu hình đúng
+import { userPool } from "../lib/cognito.js"; // Đảm bảo cấu hình đúng
 
 export const useAuthStore = create((set) => ({
   authUser: null,
@@ -44,44 +44,91 @@ export const useAuthStore = create((set) => ({
     });
 
     user.authenticateUser(authDetails, {
-      onSuccess: (result) => {
-        toast.success("Đăng nhập thành công");
-        set({ authUser: user });
-      },
+      onSuccess: async (result) => {
+      toast.success("Đăng nhập thành công");
+
+      const token = result.getIdToken().getJwtToken();
+
+      try {
+        const res = await fetch("https://05tpsgyjzi.execute-api.ap-southeast-1.amazonaws.com/dev/me", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      
+        const data = await res.json();
+        console.log("Fetched user from /me:", data); // ← Thêm dòng này để debug
+      
+        if (!res.ok || !data?.UserId) {
+          throw new Error("Không lấy được thông tin người dùng");
+        }
+      
+        set({ authUser: data }); // <-- Sửa lại dùng toàn bộ `data`, không phải `data.user`
+      } catch (err) {
+        console.error("Fetch user info failed:", err);
+        toast.error("Không lấy được thông tin người dùng");
+        set({ authUser: null });
+      }
+    
+      set({ isLoggingIng: false });
+    },
+
       onFailure: (err) => {
         toast.error("Đăng nhập thất bại");
         console.error("Login error:", err);
+        set({ isLoggingIng: false });
       },
+
       newPasswordRequired: () => {
         toast.error("Cần đổi mật khẩu mới");
+        set({ isLoggingIng: false });
       },
     });
-
-    set({ isLoggingIng: false });
   },
 
   logout: () => {
     const { authUser } = useAuthStore.getState();
-    if (authUser) {
-      authUser.signOut();
-      set({ authUser: null });
-      toast.success("Đăng xuất thành công");
+    if (authUser?.signOut) {
+      authUser.signOut(); // CognitoUser case
     }
+    set({ authUser: null });
+    toast.success("Đăng xuất thành công");
   },
 
   checkAuth: () => {
-    const currentUser = userPool.getCurrentUser();
-    if (currentUser) {
-      currentUser.getSession((err, session) => {
-        if (err || !session.isValid()) {
-          set({ authUser: null, isCheckingAuth: false });
-          return;
-        }
+  const currentUser = userPool.getCurrentUser();
+  if (currentUser) {
+    currentUser.getSession(async (err, session) => {
+      if (err || !session.isValid()) {
+        set({ authUser: null, isCheckingAuth: false });
+        return;
+      }
 
-        set({ authUser: currentUser, isCheckingAuth: false });
-      });
-    } else {
-      set({ authUser: null, isCheckingAuth: false });
-    }
-  },
+      try {
+        const token = session.getIdToken().getJwtToken();
+        const res = await fetch("https://05tpsgyjzi.execute-api.ap-southeast-1.amazonaws.com/dev/me", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!res.ok) throw new Error("Lỗi lấy thông tin người dùng");
+
+        const data = await res.json();
+        console.log("checkAuth /me result:", data); // debug xem dữ liệu gì đang trả về
+        set({ authUser: data }); // dùng toàn bộ object
+      } catch (err) {
+        console.error("checkAuth fetch failed", err);
+        set({ authUser: null });
+      }
+
+      set({ isCheckingAuth: false });
+    });
+  } else {
+    set({ authUser: null, isCheckingAuth: false });
+  }
+}
+,
 }));

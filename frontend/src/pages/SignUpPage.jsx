@@ -5,6 +5,7 @@ import AuthImagePattern from '../components/AuthImagePattern.jsx';
 import toast from 'react-hot-toast';
 import { CognitoUserAttribute } from 'amazon-cognito-identity-js';
 import { userPool } from '../lib/cognito';
+import { useNavigate } from "react-router-dom";
 
 const SignUpPage = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -14,6 +15,8 @@ const SignUpPage = () => {
     password: '',
   });
   const [isSigningUp, setIsSigningUp] = useState(false);
+
+  const navigate = useNavigate(); // Thêm để chuyển trang sau khi signup
 
   const validateForm = () => {
     if (!formData.fullName.trim()) return toast.error('Nhập đầy đủ tên');
@@ -43,10 +46,16 @@ const SignUpPage = () => {
         toast.error(err.message || 'Đăng ký thất bại');
       } else {
         toast.success('Đăng ký thành công! Kiểm tra email để xác nhận.');
-        console.log('User:', result.user);
+
+        // Lưu fullName vào localStorage để sử dụng ở login (tạo user trên DynamoDB)
+        localStorage.setItem("fullName", fullName);
+
+        // Chuyển sang trang xác nhận
+        navigate("/confirm-signup");
       }
     });
   };
+
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
