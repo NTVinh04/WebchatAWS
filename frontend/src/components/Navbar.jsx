@@ -3,7 +3,7 @@ import { useAuthStore } from '../store/useAuthStore'
 import { Link } from 'react-router-dom';
 
 const Navbar = () => {
-  const { logout, authUser } = useAuthStore();
+  const { logout, user } = useAuthStore();
   return (
     <header
       className="bg-base-100 border-b border-base-300 fixed w-full top-0 z-40 
@@ -33,7 +33,7 @@ const Navbar = () => {
               <span className="hidden sm:inline">Cài đặt</span>
             </Link>
 
-            {authUser && (
+            {user && (
               <>
                 <Link to={"/profile"} className={`btn btn-sm gap-2`}>
                   <User className="size-5" />

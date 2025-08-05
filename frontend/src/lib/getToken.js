@@ -9,7 +9,7 @@ const poolData = {
 
 const userPool = new CognitoUserPool(poolData);
 
-// ✅ Hàm dùng để lấy ID Token hiện tại
+// Hàm dùng để lấy ID Token hiện tại
 export function getCurrentIdToken() {
   const currentUser = userPool.getCurrentUser();
 

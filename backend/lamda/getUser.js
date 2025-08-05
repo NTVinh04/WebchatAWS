@@ -14,7 +14,7 @@ export const handler = async (event) => {
     const result = await ddb.send(command);
     const allUsers = result.Items.map(item => unmarshall(item));
 
-    const filtered = allUsers.filter(user => user._id !== currentUserId);
+    const filtered = allUsers.filter(user => user.userId !== currentUserId);
 
     return {
       statusCode: 200,

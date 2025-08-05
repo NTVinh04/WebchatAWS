@@ -1,94 +1,87 @@
-import { Link } from "react-router-dom";
-import AuthImagePattern from "../components/AuthImagePattern";
-import { Eye, EyeOff, Loader2, Lock, Mail, SquareUserRound } from "lucide-react";
 import { useState } from "react";
-import { loginCognito } from "../lib/cognito"; 
+import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { api } from "../lib/axios";
-import { avatarS3 } from "../constants/avatars3";
+import { loginCognito } from "../lib/cognito"; // Giả sử đây là hàm login
+import { api } from "../lib/axios"; // Axios đã cấu hình
+import {avatarS3} from "../constants/avatars3"; // giả sử có ảnh mặc định
+import { Eye, EyeOff, Loader2, Lock, Mail } from 'lucide-react';
+import AuthImagePattern from "../components/AuthImagePattern";
+import { useAuthStore } from "../store/useAuthStore";
 
 const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoggingIn, setIsLoggingIn] = useState(false); //
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  });
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [formData, setFormData] = useState({ email: "", password: "" });
+  const navigate = useNavigate();
+  const setUser = useAuthStore((state) => state.setUser);
+  const checkAuth = useAuthStore((state) => state.checkAuth);
 
-  const handleSubmit = async (e) => {
+const handleSubmit = async (e) => {
   e.preventDefault();
   setIsLoggingIn(true);
 
   try {
-    // Đăng nhập bằng Cognito
     const result = await loginCognito(formData.email, formData.password);
     const idToken = result.getIdToken().getJwtToken();
     const email = result.getIdToken().payload.email;
     const fullName = localStorage.getItem("fullName") || email.split("@")[0];
 
-    // Lưu token vào localStorage
     localStorage.setItem("idToken", idToken);
 
-    // Kiểm tra user đã tồn tại trong DynamoDB chưa
-    try {
-  await api.get("/me", {
-    headers: { Authorization: idToken }
-  });
-  console.log("User đã tồn tại trong DynamoDB");
-} catch (err) {
-  const status = err.response?.status;
-  
-  if (status === 404) {
-    // User chưa tồn tại → tạo mới
-    try {
-      await api.post("/create-user", {
-        fullName,
-        avatar: avatarS3
-      }, {
-        headers: { Authorization: idToken }
-      });
-      console.log("Đã tạo user mới trong DynamoDB");
-    } catch (createErr) {
-      toast.error(createErr.response?.data?.error || "Không thể tạo người dùng mới");
-      console.error("Lỗi khi tạo user:", createErr);
-    }
-  } else if (status === 401) {
-    toast.error("Không có quyền truy cập (401)");
-    console.error("Token không hợp lệ:", err);
-  } else if (status === 500) {
-    console.warn("Server chưa có user hoặc lỗi khác - đang xử lý tạo user...");
-    try {
-      await api.post("/create-user", {
-        fullName,
-        avatar: avatarS3
-      }, {
-        headers: { Authorization: idToken }
-      });
-      console.log("Đã tạo user mới trong DynamoDB");
-    } catch (createErr) {
-      toast.error("Lỗi khi tạo user sau lỗi 500");
-      console.error("Lỗi khi tạo user:", createErr);
-    }
-  } else {
-    toast.error(err.response?.data?.error || "Lỗi không xác định");
-    console.error("Lỗi khi gọi /me:", err);
-  }
-}
+    let isUserCreatedOrExists = false;
 
+    try {
+      await api.get("/me", {
+        headers: { Authorization: idToken },
+      });
+      console.log("User đã tồn tại trong DynamoDB");
+      isUserCreatedOrExists = true;
+    } catch (err) {
+      const status = err.response?.status;
+      const message = err.response?.data?.message?.toLowerCase() || "";
 
-    toast.success("Đăng nhập thành công!");
-    window.location.href = "/";
-    
+      if (status === 401 && message.includes("token") && message.includes("expired")) {
+        return;
+      }
+
+      if (status === 404 || status === 500) {
+        try {
+          await api.post(
+            "/create-user",
+            {
+              fullName,
+              avatar: avatarS3,
+            },
+            {
+              headers: { Authorization: idToken },
+            }
+          );
+          console.log("Đã tạo user mới trong DynamoDB");
+          isUserCreatedOrExists = true;
+        } catch (createErr) {
+          toast.error("Không thể tạo người dùng mới", { duration: 7000 });
+          console.error("Lỗi khi tạo user:", createErr);
+        }
+      } else {
+        toast.error("Đăng nhập lỗi: " + (err.response?.data?.error || "Không xác định"), {
+          duration: 7000,
+        });
+        console.error("Lỗi khi gọi /me:", err);
+      }
+    }
+
+    if (isUserCreatedOrExists) {
+      await checkAuth(); // ✅ Cập nhật lại user chính xác trong store
+      toast.success("Đăng nhập thành công!", { duration: 3000 });
+      navigate("/");
+    }
   } catch (err) {
-    toast.error("Đăng nhập thất bại");
+    toast.error("Đăng nhập thất bại", { duration: 7000 });
     console.error(err);
   } finally {
     setIsLoggingIn(false);
   }
 };
-
-
-
 
   return (
     <div className="h-screen grid lg:grid-cols-2">

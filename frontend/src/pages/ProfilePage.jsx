@@ -3,10 +3,10 @@ import React, { useState } from 'react'
 import { useAuthStore } from '../store/useAuthStore';
 
 const ProfilePage = () => {
-  const { authUser, isUpdatingProfile, updateProfile } = useAuthStore();
+  const { user, isUpdatingProfile, updateProfile } = useAuthStore();
   const [selectedImg, setSelectedImg] = useState(null);
 
-  if (!authUser) return <p>Đang tải thông tin người dùng...</p>;
+  if (!user) return <p>Đang tải thông tin người dùng...</p>;
 
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
@@ -36,7 +36,7 @@ const ProfilePage = () => {
           <div className="flex flex-col items-center gap-4">
             <div className="relative">
               <img
-                src={selectedImg || authUser.profilePic || "/avatar.png"}
+                src={selectedImg || user.profilePic || "/avatar.png"}
                 alt="Profile"
                 className="size-32 rounded-full object-cover border-4 "
               />
@@ -72,7 +72,7 @@ const ProfilePage = () => {
                 <User className="w-4 h-4" />
                 Họ và tên
               </div>
-              <p className="px-4 py-2.5 bg-base-200 rounded-lg border">{authUser?.fullName}</p>
+              <p className="px-4 py-2.5 bg-base-200 rounded-lg border">{user?.fullName}</p>
             </div>
 
             <div className="space-y-1.5">
@@ -80,7 +80,7 @@ const ProfilePage = () => {
                 <Mail className="w-4 h-4" />
                 Địa chỉ email
               </div>
-              <p className="px-4 py-2.5 bg-base-200 rounded-lg border">{authUser?.email}</p>
+              <p className="px-4 py-2.5 bg-base-200 rounded-lg border">{user?.email}</p>
             </div>
           </div>
 
@@ -89,7 +89,7 @@ const ProfilePage = () => {
             <div className="space-y-3 text-sm">
               <div className="flex items-center justify-between py-2 border-b border-zinc-700">
                 <span>Là thành viên lúc</span>
-                <span>{authUser.createdAt?.split("T")[0]}</span>
+                <span>{user.createdAt?.split("T")[0]}</span>
               </div>
               <div className="flex items-center justify-between py-2">
             </div>
