@@ -32,7 +32,7 @@ const handleSubmit = async (e) => {
 
     try {
       await api.get("/me", {
-        headers: { Authorization: idToken },
+        headers: { Authorization: `Bearer ${idToken}` },
       });
       console.log("User đã tồn tại trong DynamoDB");
       isUserCreatedOrExists = true;
@@ -71,7 +71,7 @@ const handleSubmit = async (e) => {
     }
 
     if (isUserCreatedOrExists) {
-      await checkAuth(); // ✅ Cập nhật lại user chính xác trong store
+      await checkAuth(); // Cập nhật lại user chính xác trong store
       toast.success("Đăng nhập thành công!", { duration: 3000 });
       navigate("/");
     }

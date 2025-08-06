@@ -50,7 +50,7 @@ export const useAuthStore = create((set) => ({
         const token = result.getIdToken().getJwtToken();
 
         try {
-          const res = await fetch("https://05tpsgyjzi.execute-api.ap-southeast-1.amazonaws.com/dev/me", {
+          const res = await fetch("https://kaczhbahxc.execute-api.ap-southeast-1.amazonaws.com/dev/me", {
             method: "GET",
             headers: {
               Authorization: `Bearer ${token}`,
@@ -119,7 +119,7 @@ export const useAuthStore = create((set) => ({
 
       try {
         const token = session.getIdToken().getJwtToken();
-        const res = await fetch("https://05tpsgyjzi.execute-api.ap-southeast-1.amazonaws.com/dev/me", {
+        const res = await fetch("https://kaczhbahxc.execute-api.ap-southeast-1.amazonaws.com/dev/me", {
           method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,

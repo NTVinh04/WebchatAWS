@@ -14,7 +14,7 @@ export const useChatStore = create((set, get) => ({
   getUsers: async () => {
     set({ isUsersLoading: true });
     try {
-      const res = await axiosInstance.get("/users");
+      const res = await axiosInstance.get("/user");
       set({ users: res.data });
     } catch (error) {
       toast.error(error.response?.data?.message || "Không thể tải danh sách người dùng");
@@ -45,7 +45,7 @@ export const useChatStore = create((set, get) => ({
     }
 
     try {
-      const res = await axiosInstance.get(`/messages/${conversationId}`);
+      const res = await axiosInstance.get(`/message/${conversationId}`);
       const rawMessages = res.data;
 
       const parsedMessages = rawMessages.map((msg) => ({
