@@ -15,6 +15,34 @@ export const useAuthStore = create((set) => ({
   onlineUsers: [],
   setOnlineUsers: (users) => set({ onlineUsers: users }),
 
+  updateProfile: async (updatedData) => {
+  const idToken = localStorage.getItem("idToken");
+  if (!idToken) {
+    toast.error("Không tìm thấy token người dùng");
+    return;
+  }
+
+  try {
+    const res = await fetch("https://kaczhbahxc.execute-api.ap-southeast-1.amazonaws.com/dev/me", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify(updatedData),
+    });
+
+    if (!res.ok) throw new Error("Cập nhật thông tin thất bại");
+
+    const newUser = await res.json();
+    set({ user: newUser });
+      toast.success("Cập nhật thành công");
+    } catch (err) {
+      console.error("Update profile error:", err);
+      toast.error("Lỗi khi cập nhật thông tin");
+    }
+  },
+
   signup: async ({ email, password }) => {
     set({ isSigningUp: true });
 
