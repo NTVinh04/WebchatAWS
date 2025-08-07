@@ -51,7 +51,6 @@ if (!fullName || typeof fullName !== "string") {
       fullName,
       createdAt: new Date().toISOString(),
       profilePic: "https://chatapp-pic.s3.ap-southeast-1.amazonaws.com/avatar.png",
-      status: "online"
     };
 
     const command = new PutItemCommand({
