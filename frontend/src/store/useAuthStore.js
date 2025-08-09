@@ -18,130 +18,188 @@ export const useAuthStore = create((set, get) => ({
   },
 
   // Kết nối WebSocket
-  connectWebSocket: () => {
-    const { ws, user } = get();
+  // Thêm debug vào connectWebSocket trong useAuthStore:
 
-    // Nếu chưa đăng nhập thì không mở kết nối
-    if (!user) {
-      console.warn("No user found, cannot connect WebSocket");
-      return;
-    }
+// Thay thế toàn bộ phần connectWebSocket trong useAuthStore với version có debug chi tiết hơn:
 
-    // Nếu socket đã mở thì bỏ qua
-    if (ws && ws.readyState === WebSocket.OPEN) return;
+connectWebSocket: () => {
+  const { ws, user } = get();
 
-    // Lấy JWT token từ localStorage
-    const idToken = localStorage.getItem("idToken");
-    if (!idToken) {
-      console.error("No token found, cannot connect WebSocket");
-      return;
-    }
+  if (!user) {
+    console.warn("No user found, cannot connect WebSocket");
+    return;
+  }
 
-    // Khởi tạo WebSocket với token trong query string
-    const wsUrl = `wss://hiuze9jnyb.execute-api.ap-southeast-1.amazonaws.com/production?token=${idToken}`;
-    const socket = new WebSocket(wsUrl);
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    console.log("WebSocket already connected, skipping");
+    return;
+  }
 
-    socket.onopen = () => {
-      console.log("WebSocket connected successfully");
-      // Yêu cầu danh sách online users ngay sau khi connect
-      get().fetchOnlineUsers();
-    };
+  const idToken = localStorage.getItem("idToken");
+  if (!idToken) {
+    console.error("No token found, cannot connect WebSocket");
+    return;
+  }
 
-    socket.onmessage = (event) => {
+  console.log("🔗 Attempting to connect WebSocket...");
+  console.log("🔗 User ID:", user.userId);
+  console.log("🔗 Token exists:", !!idToken);
+
+  const wsUrl = `wss://hiuze9jnyb.execute-api.ap-southeast-1.amazonaws.com/production?token=${idToken}`;
+  console.log("🔗 WebSocket URL:", wsUrl);
+  
+  const socket = new WebSocket(wsUrl);
+
+  socket.onopen = () => {
+    console.log(" WebSocket connected successfully");
+    console.log(" Socket ready state:", socket.readyState);
+    console.log(" Socket URL:", socket.url);
+    
+    get().fetchOnlineUsers();
+    
+    // Test ngay sau khi connect
+    setTimeout(() => {
+      console.log("🧪 Testing WebSocket after connect...");
+      const testMessage = {
+        action: "ping",
+        message: "connection test",
+        timestamp: new Date().toISOString()
+      };
       try {
-        const data = JSON.parse(event.data);
-        console.log("🔍 RAW WebSocket message received:", event.data);
-        console.log("🔍 Parsed data:", data);
-        console.log("🔍 Message type:", data.type);
-        console.log("🔍 Message payload:", data.payload);
-
-        switch (data.type) {
-          case "message":
-            console.log("✅ Processing chat message");
-            console.log("📩 Message payload details:", {
-              senderId: data.payload?.senderId,
-              receiverId: data.payload?.receiverId,
-              text: data.payload?.text,
-              conversationId: data.payload?.conversationId
-            });
-            
-            // Import dynamic để tránh circular dependency
-            import("./useChatStore.js").then(({ useChatStore }) => {
-              console.log("🎯 useChatStore imported successfully");
-              const chatStore = useChatStore.getState();
-              console.log("🎯 chatStore state:", chatStore);
-              
-              if (chatStore && typeof chatStore.addMessage === 'function') {
-                console.log("🎯 Calling addMessage with:", data.payload);
-                chatStore.addMessage(data.payload);
-                console.log("🎯 addMessage called successfully");
-              } else {
-                console.error("❌ Chat store addMessage function not available");
-              }
-            }).catch((err) => {
-              console.error("❌ Failed to import chat store:", err);
-            });
-            break;
-            
-          case "user_status":
-            console.log("👥 Processing user status change");
-            if (data.payload) {
-              const { userId, status } = data.payload;
-              const currentOnlineUsers = get().onlineUsers;
-              
-              if (status === "online") {
-                if (!currentOnlineUsers.includes(userId)) {
-                  set({ onlineUsers: [...currentOnlineUsers, userId] });
-                }
-              } else if (status === "offline") {
-                set({ onlineUsers: currentOnlineUsers.filter(id => id !== userId) });
-              }
-            }
-            break;
-            
-          case "online_users":
-            console.log("👥 Processing complete online users list");
-            if (Array.isArray(data.payload)) {
-              const currentUser = get().user;
-              const filteredOnlineUsers = currentUser 
-                ? data.payload.filter(userId => userId !== currentUser.userId)
-                : data.payload;
-              set({ onlineUsers: filteredOnlineUsers });
-            }
-            break;
-            
-          default:
-            console.warn("⚠️ Unknown WS message type:", data.type);
-            console.log("⚠️ Full message data:", data);
-        }
+        socket.send(JSON.stringify(testMessage));
+        console.log("🧪 Connection test sent:", testMessage);
       } catch (err) {
-        console.error("❌ WS message parse error:", err);
-        console.error("❌ Raw message:", event.data);
+        console.error(" Failed to send connection test:", err);
       }
-    };
+    }, 1000);
+  };
 
-    socket.onerror = (err) => {
-      console.error("WebSocket error:", err);
-    };
+  //  QUAN TRỌNG: Debug message handler chi tiết
+  // Trong phần socket.onmessage của connectWebSocket, sửa import như sau:
 
-    socket.onclose = (event) => {
-      console.log("WebSocket closed", event.code, event.reason);
-      set({ ws: null });
+socket.onmessage = (event) => {
+  console.log("📨 ================================");
+  console.log("📨 WebSocket message received!");
+  console.log("📨 Timestamp:", new Date().toISOString());
+  console.log("📨 Raw data:", event.data);
+  console.log("📨 Data type:", typeof event.data);
+  console.log("📨 Socket state:", socket.readyState);
+  
+  try {
+    const data = JSON.parse(event.data);
+    console.log("🔍 Parsed data structure:", {
+      type: data.type,
+      hasPayload: !!data.payload,
+      payloadType: typeof data.payload,
+      keys: Object.keys(data)
+    });
+    console.log("🔍 Full parsed data:", JSON.stringify(data, null, 2));
 
-      // Chỉ reconnect nếu không phải do logout hoặc authentication error
-      if (event.code !== 1000 && event.code !== 4401) {
-        // Thử reconnect sau 3 giây
-        setTimeout(() => {
-          const currentUser = get().user;
-          if (currentUser) { // Chỉ reconnect nếu user vẫn đăng nhập
-            get().connectWebSocket();
+    switch (data.type) {
+      case "message":
+        console.log("💬 ===== PROCESSING MESSAGE =====");
+        console.log("💬 Message payload:", data.payload);
+        console.log("💬 Payload keys:", Object.keys(data.payload || {}));
+        
+        //  SỬA: Import đúng đường dẫn
+        // Thay vì import động, sử dụng window.__chatStore
+        if (window.__chatStore) {
+          const chatState = window.__chatStore.getState();
+          const currentConversationId = chatState.getConversationId();
+          
+          console.log("💬 Current conversation ID:", currentConversationId);
+          console.log("💬 Message conversation ID:", data.payload?.conversationId);
+          console.log("💬 Is same conversation:", currentConversationId === data.payload?.conversationId);
+          
+          console.log("💬 Adding message to chat store...");
+          chatState.addMessage(data.payload);
+          console.log("💬 Message added successfully");
+        } else {
+          console.error(" Chat store not available on window");
+        }
+        break;
+        
+      case "user_status":
+        console.log("👥 ===== PROCESSING USER STATUS =====");
+        console.log("👥 Status data:", data.payload);
+        if (data.payload) {
+          const { userId, status } = data.payload;
+          const currentOnlineUsers = get().onlineUsers;
+          
+          if (status === "online" && !currentOnlineUsers.includes(userId)) {
+            set({ onlineUsers: [...currentOnlineUsers, userId] });
+            console.log("👥 User came online:", userId);
+          } else if (status === "offline") {
+            set({ onlineUsers: currentOnlineUsers.filter(id => id !== userId) });
+            console.log("👥 User went offline:", userId);
           }
-        }, 3000);
-      }
-    };
+        }
+        break;
+        
+      case "online_users":
+        console.log("👥 ===== PROCESSING ONLINE USERS =====");
+        console.log("👥 Users data:", data.payload);
+        if (Array.isArray(data.payload)) {
+          const currentUser = get().user;
+          const filteredUsers = data.payload.filter(userId => 
+            currentUser && userId !== currentUser.userId
+          );
+          console.log("👥 Setting online users:", filteredUsers);
+          set({ onlineUsers: filteredUsers });
+        }
+        break;
+        
+      case "pong":
+        console.log("🏓 ===== RECEIVED PONG =====");
+        console.log("🏓 Pong data:", data.payload);
+        break;
+        
+      default:
+        console.warn("⚠️ ===== UNKNOWN MESSAGE TYPE =====");
+        console.warn("⚠️ Type:", data.type);
+        console.warn("⚠️ Full data:", JSON.stringify(data, null, 2));
+    }
+    
+  } catch (err) {
+    console.error(" ===== MESSAGE PARSE ERROR =====");
+    console.error(" Error:", err.message);
+    console.error(" Stack:", err.stack);
+    console.error(" Raw data:", event.data);
+  }
+  
+  console.log("📨 ================================");
+};
 
-    set({ ws: socket });
-  },
+  socket.onerror = (err) => {
+    console.error(" ===== WEBSOCKET ERROR =====");
+    console.error(" Error event:", err);
+    console.error(" Socket state:", socket.readyState);
+    console.error(" Socket URL:", socket.url);
+  };
+
+  socket.onclose = (event) => {
+    console.log("🔌 ===== WEBSOCKET CLOSED =====");
+    console.log("🔌 Close code:", event.code);
+    console.log("🔌 Close reason:", event.reason);
+    console.log("🔌 Was clean:", event.wasClean);
+    console.log("🔌 Socket state:", socket.readyState);
+    
+    set({ ws: null });
+
+    if (event.code !== 1000 && event.code !== 4401) {
+      console.log("🔄 Attempting to reconnect in 3 seconds...");
+      setTimeout(() => {
+        const currentUser = get().user;
+        if (currentUser) {
+          get().connectWebSocket();
+        }
+      }, 3000);
+    }
+  };
+
+  set({ ws: socket });
+  console.log("🔗 WebSocket instance created and stored");
+},
 
   fetchOnlineUsers: async () => {
     const idToken = localStorage.getItem("idToken");
@@ -416,4 +474,88 @@ export const useAuthStore = create((set, get) => ({
       set({ isCheckingAuth: false });
     });
   },
+  // Thêm các function test này vào useAuthStore
+
+// Test WebSocket connection
+testWebSocket: () => {
+  const { ws } = get();
+  
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    console.error(" WebSocket not connected");
+    console.log("🔍 WebSocket state:", {
+      exists: !!ws,
+      readyState: ws?.readyState,
+      readyStateText: ws?.readyState === 0 ? 'CONNECTING' : 
+                     ws?.readyState === 1 ? 'OPEN' : 
+                     ws?.readyState === 2 ? 'CLOSING' : 
+                     ws?.readyState === 3 ? 'CLOSED' : 'UNKNOWN'
+    });
+    return false;
+  }
+  
+  console.log("🧪 Testing WebSocket by sending ping...");
+  
+  // Thử gửi một message test
+  const testMessage = {
+    action: "ping",
+    message: "test from client",
+    timestamp: new Date().toISOString()
+  };
+  
+  try {
+    ws.send(JSON.stringify(testMessage));
+    console.log("🧪 Test message sent:", testMessage);
+    return true;
+  } catch (error) {
+    console.error(" Failed to send test message:", error);
+    return false;
+  }
+},
+
+// Kiểm tra trạng thái kết nối WebSocket
+checkWebSocketStatus: () => {
+  const { ws, user } = get();
+  
+  console.log("🔍 WebSocket Status Check:");
+  console.log("🔍 User logged in:", !!user);
+  console.log("🔍 User ID:", user?.userId);
+  console.log("🔍 WebSocket exists:", !!ws);
+  console.log("🔍 WebSocket ready state:", ws?.readyState);
+  console.log("🔍 WebSocket URL:", ws?.url);
+  console.log("🔍 Token exists:", !!localStorage.getItem("idToken"));
+  
+  if (ws) {
+    const stateNames = {
+      0: 'CONNECTING',
+      1: 'OPEN', 
+      2: 'CLOSING',
+      3: 'CLOSED'
+    };
+    console.log("🔍 WebSocket state:", stateNames[ws.readyState] || 'UNKNOWN');
+  }
+  
+  return {
+    hasUser: !!user,
+    hasWebSocket: !!ws,
+    isConnected: ws?.readyState === WebSocket.OPEN,
+    hasToken: !!localStorage.getItem("idToken")
+  };
+},
+
+// Force reconnect WebSocket
+reconnectWebSocket: () => {
+  console.log("🔄 Force reconnecting WebSocket...");
+  
+  const { ws } = get();
+  
+  // Đóng kết nối cũ nếu có
+  if (ws) {
+    ws.close(1000, "Manual reconnect");
+  }
+  
+  // Đợi một chút rồi kết nối lại
+  setTimeout(() => {
+    get().connectWebSocket();
+  }, 1000);
+}
 }));

@@ -25,7 +25,7 @@ export const useChatStore = create((set, get) => ({
   // Tạo conversationId từ senderId và receiverId
   getConversationId: () => {
     const { selectedUser } = get();
-    const senderId = window.__AUTH_USER_ID__ || null; // Sẽ set từ useAuthStore
+    const senderId = window.__AUTH_USER_ID__ || null;
     const receiverId = selectedUser?.userId;
 
     if (!senderId || !receiverId) return null;
@@ -70,25 +70,44 @@ export const useChatStore = create((set, get) => ({
 
   // Gửi tin nhắn
   sendMessage: async (messageData) => {
+    console.log("📤 sendMessage called with:", messageData);
+    
     const { messages, selectedUser, getConversationId } = get();
-    const senderId = window.__AUTH_USER_ID__ || null; // Sẽ set từ useAuthStore
+    const senderId = window.__AUTH_USER_ID__ || null;
     const receiverId = selectedUser?.userId;
+
+    console.log("📤 Send message details:", {
+      senderId,
+      receiverId,
+      selectedUser: selectedUser?.email || selectedUser?.userId,
+      messageData
+    });
 
     if (!senderId || !receiverId) {
       toast.error("Không xác định được người gửi hoặc người nhận");
-      console.warn("sendMessage: senderId hoặc receiverId bị thiếu", { senderId, receiverId });
+      console.warn(" sendMessage: senderId hoặc receiverId bị thiếu", { senderId, receiverId });
       return;
     }
 
     const conversationId = getConversationId();
+    console.log("📤 Conversation ID:", conversationId);
+
+    const payload = {
+      ...messageData,
+      senderId,
+      receiverId,
+      conversationId,
+    };
+
+    console.log("📤 Full payload being sent:", payload);
 
     try {
-      const res = await axiosInstance.post(`/send-message`, {
-        ...messageData,
-        senderId,
-        receiverId,
-        conversationId,
-      });
+      console.log("📤 Sending POST request to /send-message...");
+      
+      const res = await axiosInstance.post(`/send-message`, payload);
+      
+      console.log(" Send message response:", res.data);
+      console.log(" Response status:", res.status);
 
       const newMessage = {
         ...res.data,
@@ -96,18 +115,73 @@ export const useChatStore = create((set, get) => ({
         type: res.data.attachment ? "image" : "text",
       };
 
+      console.log(" Formatted new message:", newMessage);
+      
       set({ messages: [...messages, newMessage] });
+      console.log(" Message added to local store");
+      
+      return newMessage;
     } catch (error) {
-      console.error("Lỗi khi gửi tin nhắn:", error);
+      console.error(" Error sending message:", error);
+      console.error(" Error response:", error.response?.data);
+      console.error(" Error status:", error.response?.status);
       toast.error(error.response?.data?.message || "Lỗi khi gửi tin nhắn");
     }
   },
 
-  // Thêm tin nhắn mới từ WebSocket (thay thế cho subscribeToMessages)
+  //  FIXED: Enhanced addMessage with proper debug and conversation check
   addMessage: (newMessage) => {
-    const { messages } = get();
+    console.log("💬 ===== ADD MESSAGE DEBUG =====");
+    console.log("💬 Called with:", newMessage);
+    console.log("💬 Message type:", typeof newMessage);
+    console.log("💬 Message keys:", Object.keys(newMessage || {}));
     
-    if (!newMessage) return;
+    const { messages, selectedUser } = get();
+    const currentUserId = window.__AUTH_USER_ID__;
+    
+    console.log("💬 Current state:", {
+      messagesCount: messages.length,
+      selectedUser: selectedUser?.userId,
+      currentUserId: currentUserId
+    });
+    
+    if (!newMessage) {
+      console.warn(" newMessage is null/undefined");
+      return;
+    }
+
+    // Kiểm tra xem có phải tin nhắn của conversation hiện tại không
+    const conversationId = get().getConversationId();
+    const messageConversationId = newMessage.conversationId;
+    
+    console.log("💬 Conversation check:", {
+      currentConversationId: conversationId,
+      messageConversationId: messageConversationId,
+      isMatch: conversationId === messageConversationId
+    });
+
+    // Nếu không phải conversation hiện tại thì bỏ qua
+    if (conversationId !== messageConversationId) {
+      console.log("💬 Message not for current conversation, ignoring");
+      return;
+    }
+
+    // Kiểm tra duplicate
+    const isDuplicate = messages.some(msg => 
+      msg.timestamp === newMessage.timestamp && 
+      msg.senderId === newMessage.senderId &&
+      msg.text === newMessage.text
+    );
+
+    console.log("💬 Duplicate check:", {
+      isDuplicate: isDuplicate,
+      existingMessagesCount: messages.length
+    });
+
+    if (isDuplicate) {
+      console.log("💬 Duplicate message detected, skipping");
+      return;
+    }
 
     const formattedMessage = {
       ...newMessage,
@@ -115,53 +189,27 @@ export const useChatStore = create((set, get) => ({
       type: newMessage.attachment ? "image" : "text",
     };
 
-    set({ messages: [...messages, formattedMessage] });
+    console.log("💬 Formatted message:", formattedMessage);
+    
+    const updatedMessages = [...messages, formattedMessage];
+    console.log("💬 Updating messages array:", {
+      oldCount: messages.length,
+      newCount: updatedMessages.length
+    });
+    
+    set({ messages: updatedMessages });
+    
+    console.log("💬 Messages updated successfully");
+    console.log("💬 ===== END ADD MESSAGE DEBUG =====");
   },
 
   setSelectedUser: (selectedUser) => {
     set({ selectedUser });
   },
-  // Chỉ cần sửa phần addMessage trong useChatStore của bạn:
-
-// Thêm tin nhắn mới từ WebSocket
-// Thay thế addMessage trong useChatStore:
-
-// Thêm tin nhắn mới từ WebSocket
-// Thêm debug vào addMessage trong useChatStore:
-
-addMessage: (newMessage) => {
-  console.log(" addMessage called with:", newMessage);
-  
-  const { messages } = get();
-  console.log("🔍 Current messages count:", messages.length);
-  
-  if (!newMessage) {
-    console.warn("❌ newMessage is null/undefined");
-    return;
-  }
-
-  // Kiểm tra duplicate đơn giản
-  const isDuplicate = messages.some(msg => 
-    msg.timestamp === newMessage.timestamp && 
-    msg.senderId === newMessage.senderId &&
-    msg.text === newMessage.text
-  );
-
-  console.log(" Is duplicate:", isDuplicate);
-
-  if (isDuplicate) {
-    console.log(" Duplicate message detected, skipping");
-    return;
-  }
-
-  const formattedMessage = {
-    ...newMessage,
-    image: newMessage.attachment || null,
-    type: newMessage.attachment ? "image" : "text",
-  };
-
-  console.log(" Adding formatted message:", formattedMessage);
-  set({ messages: [...messages, formattedMessage] });
-  console.log(" Messages updated, new count:", messages.length + 1);
-},
 }));
+
+// Expose store cho debug (thêm vào cuối file)
+if (typeof window !== 'undefined') {
+  window.__chatStore = useChatStore;
+  window.__chatState = () => useChatStore.getState();
+}
