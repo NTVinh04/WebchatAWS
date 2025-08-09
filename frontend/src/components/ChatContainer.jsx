@@ -12,8 +12,6 @@ const ChatContainer = () => {
     getMessages,
     isMessagesLoading,
     selectedUser,
-    subscribeToMessages,
-    unsubscribeFromMessages,
   } = useChatStore();
 
   const { user } = useAuthStore();
@@ -24,11 +22,6 @@ const ChatContainer = () => {
     if (!selectedUser) return;
 
     getMessages(); // Sử dụng store để tự tạo conversationId
-    subscribeToMessages();
-
-    return () => {
-      unsubscribeFromMessages();
-    };
   }, [selectedUser]);
 
   // Scroll xuống cuối khi có tin nhắn mới

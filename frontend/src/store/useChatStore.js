@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import toast from "react-hot-toast";
 import { api as axiosInstance } from "../lib/axios";
-import { useAuthStore } from "./useAuthStore";
 
 export const useChatStore = create((set, get) => ({
   messages: [],
@@ -26,7 +25,7 @@ export const useChatStore = create((set, get) => ({
   // Tạo conversationId từ senderId và receiverId
   getConversationId: () => {
     const { selectedUser } = get();
-    const senderId = useAuthStore.getState().user?.userId;
+    const senderId = window.__AUTH_USER_ID__ || null; // Sẽ set từ useAuthStore
     const receiverId = selectedUser?.userId;
 
     if (!senderId || !receiverId) return null;
@@ -72,7 +71,7 @@ export const useChatStore = create((set, get) => ({
   // Gửi tin nhắn
   sendMessage: async (messageData) => {
     const { messages, selectedUser, getConversationId } = get();
-    const senderId = useAuthStore.getState().user?.userId;
+    const senderId = window.__AUTH_USER_ID__ || null; // Sẽ set từ useAuthStore
     const receiverId = selectedUser?.userId;
 
     if (!senderId || !receiverId) {
@@ -104,38 +103,65 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  // Nhận tin nhắn mới qua socket.io
-  subscribeToMessages: () => {
-    const socket = useAuthStore.getState().socket;
-    const currentUserId = useAuthStore.getState().user?.userId;
-    const { selectedUser } = get();
+  // Thêm tin nhắn mới từ WebSocket (thay thế cho subscribeToMessages)
+  addMessage: (newMessage) => {
+    const { messages } = get();
+    
+    if (!newMessage) return;
 
-    if (!socket || !selectedUser || !currentUserId) return;
+    const formattedMessage = {
+      ...newMessage,
+      image: newMessage.attachment || null,
+      type: newMessage.attachment ? "image" : "text",
+    };
 
-    const expectedConversationId = [currentUserId, selectedUser.userId].sort().join("_");
-
-    socket.on("newMessage", (newMessage) => {
-      if (newMessage.conversationId !== expectedConversationId) return;
-
-      const formattedMessage = {
-        ...newMessage,
-        image: newMessage.attachment || null,
-        type: newMessage.attachment ? "image" : "text",
-      };
-
-      set((state) => ({
-        messages: [...state.messages, formattedMessage],
-      }));
-    });
-  },
-
-  unsubscribeFromMessages: () => {
-    const socket = useAuthStore.getState().socket;
-    if (!socket) return;
-    socket.off("newMessage");
+    set({ messages: [...messages, formattedMessage] });
   },
 
   setSelectedUser: (selectedUser) => {
     set({ selectedUser });
   },
+  // Chỉ cần sửa phần addMessage trong useChatStore của bạn:
+
+// Thêm tin nhắn mới từ WebSocket
+// Thay thế addMessage trong useChatStore:
+
+// Thêm tin nhắn mới từ WebSocket
+// Thêm debug vào addMessage trong useChatStore:
+
+addMessage: (newMessage) => {
+  console.log(" addMessage called with:", newMessage);
+  
+  const { messages } = get();
+  console.log("🔍 Current messages count:", messages.length);
+  
+  if (!newMessage) {
+    console.warn("❌ newMessage is null/undefined");
+    return;
+  }
+
+  // Kiểm tra duplicate đơn giản
+  const isDuplicate = messages.some(msg => 
+    msg.timestamp === newMessage.timestamp && 
+    msg.senderId === newMessage.senderId &&
+    msg.text === newMessage.text
+  );
+
+  console.log(" Is duplicate:", isDuplicate);
+
+  if (isDuplicate) {
+    console.log(" Duplicate message detected, skipping");
+    return;
+  }
+
+  const formattedMessage = {
+    ...newMessage,
+    image: newMessage.attachment || null,
+    type: newMessage.attachment ? "image" : "text",
+  };
+
+  console.log(" Adding formatted message:", formattedMessage);
+  set({ messages: [...messages, formattedMessage] });
+  console.log(" Messages updated, new count:", messages.length + 1);
+},
 }));
