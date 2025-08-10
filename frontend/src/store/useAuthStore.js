@@ -1,215 +1,390 @@
 import { create } from "zustand";
 import toast from "react-hot-toast";
-import { CognitoUser, AuthenticationDetails } from "amazon-cognito-identity-js";
 import { userPool } from "../lib/cognito.js";
 
 export const useAuthStore = create((set, get) => ({
   user: null,
   isSigningUp: false,
-  isLoggingIn: false,
   isCheckingAuth: true,
   onlineUsers: [],
   ws: null,
   activeInterval: null,
+  // Connection state tracking
+  isConnecting: false,
+  connectionAttempts: 0,
+  maxConnectionAttempts: 3,
+
+  // ✅ Helper function để set user từ bên ngoài
+  setUser: (userData) => {
+    console.log("✅ Setting user:", userData?.userId);
+    set({ user: userData });
+    
+    if (userData?.userId) {
+      window.__AUTH_USER_ID__ = userData.userId;
+    }
+  },
 
   setOnlineUsers: (users) => {
     console.log("Setting online users:", users);
     set({ onlineUsers: users });
   },
 
-  // Kết nối WebSocket
-  // Thêm debug vào connectWebSocket trong useAuthStore:
-
-// Thay thế toàn bộ phần connectWebSocket trong useAuthStore với version có debug chi tiết hơn:
-
-connectWebSocket: () => {
-  const { ws, user } = get();
-
-  if (!user) {
-    console.warn("No user found, cannot connect WebSocket");
-    return;
-  }
-
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    console.log("WebSocket already connected, skipping");
-    return;
-  }
-
-  const idToken = localStorage.getItem("idToken");
-  if (!idToken) {
-    console.error("No token found, cannot connect WebSocket");
-    return;
-  }
-
-  console.log("🔗 Attempting to connect WebSocket...");
-  console.log("🔗 User ID:", user.userId);
-  console.log("🔗 Token exists:", !!idToken);
-
-  const wsUrl = `wss://hiuze9jnyb.execute-api.ap-southeast-1.amazonaws.com/production?token=${idToken}`;
-  console.log("🔗 WebSocket URL:", wsUrl);
-  
-  const socket = new WebSocket(wsUrl);
-
-  socket.onopen = () => {
-    console.log(" WebSocket connected successfully");
-    console.log(" Socket ready state:", socket.readyState);
-    console.log(" Socket URL:", socket.url);
+  // ✅ Function để khởi tạo tất cả services sau khi login
+  initializeUserServices: async () => {
+    const { user } = get();
     
-    get().fetchOnlineUsers();
+    if (!user?.userId) {
+      console.warn("❌ No user found, cannot initialize services");
+      return;
+    }
+
+    console.log("🚀 Initializing services for user:", user.userId);
     
-    // Test ngay sau khi connect
-    setTimeout(() => {
-      console.log("🧪 Testing WebSocket after connect...");
-      const testMessage = {
-        action: "ping",
-        message: "connection test",
+    // Clean any existing connections first
+    get().disconnectWebSocket();
+    
+    // Clear any existing intervals
+    const existingInterval = get().activeInterval;
+    if (existingInterval) {
+      clearInterval(existingInterval);
+      set({ activeInterval: null });
+    }
+    
+    // Reset connection states
+    set({ 
+      ws: null,
+      isConnecting: false,
+      connectionAttempts: 0,
+      onlineUsers: []
+    });
+    
+    try {
+      console.log("📡 Step 1: Fetching online users...");
+      await get().fetchOnlineUsers();
+      
+      console.log("🏓 Step 2: Starting active ping...");
+      get().startActivePing();
+      
+      // Wait a bit for ping to establish presence
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      console.log("🔌 Step 3: Connecting WebSocket...");
+      get().connectWebSocket();
+      
+      console.log("✅ All services initialized successfully for user:", user.userId);
+      
+      // ✅ VERIFICATION: Check connection after a delay
+      setTimeout(() => {
+        const status = get().checkWebSocketStatus();
+        if (status.isConnected) {
+          console.log("✅ WebSocket connection verified successfully");
+        } else {
+          console.warn("⚠️ WebSocket connection verification failed, status:", status);
+        }
+      }, 1000);
+      
+    } catch (err) {
+      console.error("❌ Error initializing services:", err);
+      throw err;
+    }
+  },
+
+  // WebSocket connection với validation và cleanup
+  connectWebSocket: () => {
+    const { ws, user, isConnecting, connectionAttempts, maxConnectionAttempts } = get();
+
+    if (!user?.userId) {
+      console.warn("❌ No user or userId found, cannot connect WebSocket");
+      return;
+    }
+
+    if (isConnecting) {
+      console.log("🔄 Connection already in progress, skipping...");
+      return;
+    }
+
+    if (connectionAttempts >= maxConnectionAttempts) {
+      console.error("❌ Max connection attempts reached, stopping reconnect");
+      return;
+    }
+
+    // Clean up existing connection first
+    if (ws) {
+      console.log("🧹 Cleaning up existing WebSocket connection");
+      try {
+        ws.close(1000, "New connection starting");
+      } catch (err) {
+        console.error("Error closing old websocket:", err);
+      }
+      set({ ws: null });
+    }
+
+    const idToken = localStorage.getItem("idToken");
+    if (!idToken) {
+      console.error("❌ No token found, cannot connect WebSocket");
+      return;
+    }
+
+    // Validate token format
+    try {
+      const tokenParts = idToken.split('.');
+      if (tokenParts.length !== 3) {
+        throw new Error("Invalid token format");
+      }
+      
+      const payload = JSON.parse(atob(tokenParts[1]));
+      if (!payload.sub || payload.sub !== user.userId) {
+        console.error("❌ Token userId mismatch:", { tokenSub: payload.sub, currentUser: user.userId });
+        get().logout(false);
+        return;
+      }
+      
+      const now = Math.floor(Date.now() / 1000);
+      if (payload.exp && payload.exp < now) {
+        console.error("❌ Token expired");
+        get().logout(false);
+        return;
+      }
+      
+    } catch (err) {
+      console.error("❌ Token validation failed:", err);
+      get().logout(false);
+      return;
+    }
+
+    set({ isConnecting: true, connectionAttempts: connectionAttempts + 1 });
+
+    console.log(`🔗 Connecting WebSocket for user: ${user.userId} (attempt ${connectionAttempts + 1})`);
+
+    // ✅ FIXED: URL khớp với backend $connect handler
+    const wsUrl = `wss://hiuze9jnyb.execute-api.ap-southeast-1.amazonaws.com/production?token=${encodeURIComponent(idToken)}`;
+    console.log("🔗 WebSocket URL (token masked):", wsUrl.replace(idToken, '[TOKEN]'));
+    
+    const socket = new WebSocket(wsUrl);
+    const connectionUserId = user.userId;
+
+    // Connection timeout
+    const connectionTimeout = setTimeout(() => {
+      if (socket.readyState === WebSocket.CONNECTING) {
+        console.error("❌ WebSocket connection timeout");
+        socket.close();
+        set({ isConnecting: false });
+      }
+    }, 10000);
+
+    socket.onopen = () => {
+      clearTimeout(connectionTimeout);
+      
+      const currentUser = get().user;
+      if (!currentUser || currentUser.userId !== connectionUserId) {
+        console.warn("⚠️ User changed during connection, closing socket");
+        socket.close(1000, "User changed");
+        return;
+      }
+
+      console.log("✅ WebSocket connected successfully for user:", connectionUserId);
+      
+      set({ 
+        ws: socket, 
+        isConnecting: false, 
+        connectionAttempts: 0 
+      });
+      
+      get().fetchOnlineUsers();
+      
+      const identifyMessage = {
+        action: "identify",
+        userId: connectionUserId,
         timestamp: new Date().toISOString()
       };
+      
       try {
-        socket.send(JSON.stringify(testMessage));
-        console.log("🧪 Connection test sent:", testMessage);
+        socket.send(JSON.stringify(identifyMessage));
+        console.log("🆔 Identification sent:", identifyMessage);
       } catch (err) {
-        console.error(" Failed to send connection test:", err);
+        console.error("❌ Failed to send identification:", err);
       }
-    }, 1000);
-  };
+    };
 
-  //  QUAN TRỌNG: Debug message handler chi tiết
-  // Trong phần socket.onmessage của connectWebSocket, sửa import như sau:
+    socket.onmessage = (event) => {
+      const currentUser = get().user;
+      
+      if (!currentUser || currentUser.userId !== connectionUserId) {
+        console.warn("🚫 Received message but user changed, ignoring");
+        return;
+      }
 
-socket.onmessage = (event) => {
-  console.log("📨 ================================");
-  console.log("📨 WebSocket message received!");
-  console.log("📨 Timestamp:", new Date().toISOString());
-  console.log("📨 Raw data:", event.data);
-  console.log("📨 Data type:", typeof event.data);
-  console.log("📨 Socket state:", socket.readyState);
-  
-  try {
-    const data = JSON.parse(event.data);
-    console.log("🔍 Parsed data structure:", {
-      type: data.type,
-      hasPayload: !!data.payload,
-      payloadType: typeof data.payload,
-      keys: Object.keys(data)
-    });
-    console.log("🔍 Full parsed data:", JSON.stringify(data, null, 2));
+      console.log("📨 WebSocket message received for user:", currentUser.userId);
+      
+      try {
+        const data = JSON.parse(event.data);
+        console.log("🔍 Parsed data:", JSON.stringify(data, null, 2));
 
-    switch (data.type) {
-      case "message":
-        console.log("💬 ===== PROCESSING MESSAGE =====");
-        console.log("💬 Message payload:", data.payload);
-        console.log("💬 Payload keys:", Object.keys(data.payload || {}));
+        if (!data.type) {
+          console.warn("⚠️ Message missing type field");
+          return;
+        }
+
+        switch (data.type) {
+          case "message":
+            if (!data.payload || !data.payload.receiverId) {
+              console.warn("⚠️ Invalid message payload");
+              break;
+            }
+            
+            if (data.payload.receiverId !== currentUser.userId) {
+              console.log("🚫 Message not for current user, ignoring");
+              break;
+            }
+            
+            if (window.__chatStore) {
+              const chatState = window.__chatStore.getState();
+              chatState.addMessage(data.payload);
+              console.log("💬 Message added to chat store");
+            } else {
+              console.error("❌ Chat store not available");
+            }
+            break;
+            
+          case "user_status":
+            if (!data.payload || !data.payload.userId) {
+              console.warn("⚠️ Invalid user status payload");
+              break;
+            }
+            
+            const { userId, status } = data.payload;
+            
+            if (userId === currentUser.userId) {
+              console.log("🚫 Ignoring status update for self");
+              break;
+            }
+            
+            const currentOnlineUsers = get().onlineUsers;
+            
+            if (status === "online" && !currentOnlineUsers.includes(userId)) {
+              set({ onlineUsers: [...currentOnlineUsers, userId] });
+              console.log("👥 User came online:", userId);
+            } else if (status === "offline") {
+              set({ onlineUsers: currentOnlineUsers.filter(id => id !== userId) });
+              console.log("👥 User went offline:", userId);
+            }
+            break;
+            
+          case "online_users":
+            if (!Array.isArray(data.payload)) {
+              console.warn("⚠️ Invalid online users payload");
+              break;
+            }
+            
+            const filteredUsers = data.payload.filter(userId => 
+              userId !== currentUser.userId
+            );
+            console.log("👥 Setting online users (excluding self):", filteredUsers);
+            set({ onlineUsers: filteredUsers });
+            break;
+            
+          case "pong":
+            console.log("🏓 Received pong");
+            break;
+
+          case "error":
+            console.error("❌ Received error:", data.payload);
+            if (data.payload?.code === 'USER_MISMATCH') {
+              console.error("❌ Critical: User mismatch detected, logging out");
+              get().logout(false);
+            }
+            break;
+            
+          default:
+            console.warn("⚠️ Unknown message type:", data.type);
+        }
         
-        //  SỬA: Import đúng đường dẫn
-        // Thay vì import động, sử dụng window.__chatStore
-        if (window.__chatStore) {
-          const chatState = window.__chatStore.getState();
-          const currentConversationId = chatState.getConversationId();
+      } catch (err) {
+        console.error("❌ Message parse error:", err.message);
+      }
+    };
+
+    socket.onerror = (err) => {
+      clearTimeout(connectionTimeout);
+      console.error("❌ WebSocket error:", err);
+      set({ isConnecting: false });
+    };
+
+    socket.onclose = (event) => {
+      clearTimeout(connectionTimeout);
+      console.log("🔌 WebSocket closed:", event.code, event.reason);
+      
+      const currentWs = get().ws;
+      if (currentWs === socket) {
+        set({ ws: null });
+      }
+      
+      set({ isConnecting: false });
+
+      const shouldReconnect = 
+        event.code !== 1000 && // Normal closure
+        event.code !== 4401 && // Unauthorized
+        event.code !== 4403;   // Forbidden
+
+      if (shouldReconnect) {
+        const currentUser = get().user;
+        const attempts = get().connectionAttempts;
+        
+        if (currentUser && currentUser.userId === connectionUserId && attempts < maxConnectionAttempts) {
+          const delay = Math.min(1000 * Math.pow(2, attempts), 10000);
+          console.log(`🔄 Reconnecting in ${delay}ms... (attempt ${attempts + 1}/${maxConnectionAttempts})`);
           
-          console.log("💬 Current conversation ID:", currentConversationId);
-          console.log("💬 Message conversation ID:", data.payload?.conversationId);
-          console.log("💬 Is same conversation:", currentConversationId === data.payload?.conversationId);
-          
-          console.log("💬 Adding message to chat store...");
-          chatState.addMessage(data.payload);
-          console.log("💬 Message added successfully");
+          setTimeout(() => {
+            const stillCurrentUser = get().user;
+            if (stillCurrentUser && stillCurrentUser.userId === connectionUserId) {
+              get().connectWebSocket();
+            }
+          }, delay);
         } else {
-          console.error(" Chat store not available on window");
+          console.log("🚫 Max reconnection attempts reached or user changed");
+          set({ connectionAttempts: 0 });
         }
-        break;
-        
-      case "user_status":
-        console.log("👥 ===== PROCESSING USER STATUS =====");
-        console.log("👥 Status data:", data.payload);
-        if (data.payload) {
-          const { userId, status } = data.payload;
-          const currentOnlineUsers = get().onlineUsers;
-          
-          if (status === "online" && !currentOnlineUsers.includes(userId)) {
-            set({ onlineUsers: [...currentOnlineUsers, userId] });
-            console.log("👥 User came online:", userId);
-          } else if (status === "offline") {
-            set({ onlineUsers: currentOnlineUsers.filter(id => id !== userId) });
-            console.log("👥 User went offline:", userId);
-          }
-        }
-        break;
-        
-      case "online_users":
-        console.log("👥 ===== PROCESSING ONLINE USERS =====");
-        console.log("👥 Users data:", data.payload);
-        if (Array.isArray(data.payload)) {
-          const currentUser = get().user;
-          const filteredUsers = data.payload.filter(userId => 
-            currentUser && userId !== currentUser.userId
-          );
-          console.log("👥 Setting online users:", filteredUsers);
-          set({ onlineUsers: filteredUsers });
-        }
-        break;
-        
-      case "pong":
-        console.log("🏓 ===== RECEIVED PONG =====");
-        console.log("🏓 Pong data:", data.payload);
-        break;
-        
-      default:
-        console.warn("⚠️ ===== UNKNOWN MESSAGE TYPE =====");
-        console.warn("⚠️ Type:", data.type);
-        console.warn("⚠️ Full data:", JSON.stringify(data, null, 2));
-    }
+      }
+    };
+
+    console.log("🔗 WebSocket connection initiated for user:", connectionUserId);
+  },
+
+  disconnectWebSocket: () => {
+    const { ws } = get();
+    const currentUser = get().user;
     
-  } catch (err) {
-    console.error(" ===== MESSAGE PARSE ERROR =====");
-    console.error(" Error:", err.message);
-    console.error(" Stack:", err.stack);
-    console.error(" Raw data:", event.data);
-  }
-  
-  console.log("📨 ================================");
-};
-
-  socket.onerror = (err) => {
-    console.error(" ===== WEBSOCKET ERROR =====");
-    console.error(" Error event:", err);
-    console.error(" Socket state:", socket.readyState);
-    console.error(" Socket URL:", socket.url);
-  };
-
-  socket.onclose = (event) => {
-    console.log("🔌 ===== WEBSOCKET CLOSED =====");
-    console.log("🔌 Close code:", event.code);
-    console.log("🔌 Close reason:", event.reason);
-    console.log("🔌 Was clean:", event.wasClean);
-    console.log("🔌 Socket state:", socket.readyState);
+    console.log("🔌 Disconnecting WebSocket for user:", currentUser?.userId);
+    
+    set({ 
+      isConnecting: false, 
+      connectionAttempts: 0 
+    });
+    
+    if (ws) {
+      try {
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+          ws.close(1000, "Manual disconnect");
+        }
+      } catch (err) {
+        console.error("Error during WebSocket disconnect:", err);
+      }
+    }
     
     set({ ws: null });
-
-    if (event.code !== 1000 && event.code !== 4401) {
-      console.log("🔄 Attempting to reconnect in 3 seconds...");
-      setTimeout(() => {
-        const currentUser = get().user;
-        if (currentUser) {
-          get().connectWebSocket();
-        }
-      }, 3000);
-    }
-  };
-
-  set({ ws: socket });
-  console.log("🔗 WebSocket instance created and stored");
-},
+  },
 
   fetchOnlineUsers: async () => {
     const idToken = localStorage.getItem("idToken");
-    if (!idToken) {
-      console.warn("No token found for fetching online users");
+    const currentUser = get().user;
+    
+    if (!idToken || !currentUser?.userId) {
+      console.warn("No token or user found for fetching online users");
       return;
     }
 
     try {
-      console.log("Fetching online users...");
+      console.log("Fetching online users for user:", currentUser.userId);
       const res = await fetch(
         "https://kaczhbahxc.execute-api.ap-southeast-1.amazonaws.com/dev/user",
         {
@@ -222,24 +397,25 @@ socket.onmessage = (event) => {
       }
 
       const data = await res.json();
-      console.log("Raw user data from API:", data);
+      
+      const stillCurrentUser = get().user;
+      if (!stillCurrentUser || stillCurrentUser.userId !== currentUser.userId) {
+        console.log("🚫 User changed during fetch, ignoring results");
+        return;
+      }
       
       const now = Date.now();
-      const ONLINE_THRESHOLD = 5 * 60 * 1000; // 5 phút
-      
-      const currentUser = get().user;
+      const ONLINE_THRESHOLD = 5 * 60 * 1000;
       
       const onlineUserIds = data
         .filter((u) => {
-          // Loại bỏ chính user hiện tại
-          if (currentUser && u.userId === currentUser.userId) return false;
+          if (u.userId === currentUser.userId) return false;
           
           if (!u.lastActiveAt) return false;
           const lastActive = new Date(u.lastActiveAt).getTime();
           const timeDiff = now - lastActive;
           const isOnline = timeDiff < ONLINE_THRESHOLD;
           
-          console.log(`User ${u.userId}: lastActive=${u.lastActiveAt}, timeDiff=${timeDiff}ms, isOnline=${isOnline}`);
           return isOnline;
         })
         .map((u) => u.userId);
@@ -253,10 +429,21 @@ socket.onmessage = (event) => {
   },
 
   startActivePing: () => {
+    const existingInterval = get().activeInterval;
+    if (existingInterval) {
+      clearInterval(existingInterval);
+    }
+
     const idToken = localStorage.getItem("idToken");
     if (!idToken) return;
 
     const ping = async () => {
+      const currentUser = get().user;
+      if (!currentUser?.userId) {
+        console.log("No user found, stopping active ping");
+        return;
+      }
+
       try {
         const res = await fetch(
           "https://kaczhbahxc.execute-api.ap-southeast-1.amazonaws.com/dev/active",
@@ -267,18 +454,17 @@ socket.onmessage = (event) => {
         );
         
         if (res.ok) {
-          console.log("Active ping successful");
-          // Sau khi ping thành công, cập nhật danh sách online users
+          console.log("Active ping successful for user:", currentUser.userId);
           get().fetchOnlineUsers();
+        } else {
+          console.warn("Active ping failed:", res.status);
         }
       } catch (err) {
         console.error("Active ping failed:", err);
       }
     };
 
-    // Ping ngay lập tức
     ping();
-    // Sau đó ping mỗi 30 giây
     const interval = setInterval(ping, 30000);
     set({ activeInterval: interval });
   },
@@ -329,90 +515,34 @@ socket.onmessage = (event) => {
     });
   },
 
-  login: async ({ email, password }) => {
-    set({ isLoggingIn: true });
-
-    const authDetails = new AuthenticationDetails({
-      Username: email,
-      Password: password,
-    });
-
-    const cognitoUser = new CognitoUser({
-      Username: email,
-      Pool: userPool,
-    });
-
-    cognitoUser.authenticateUser(authDetails, {
-      onSuccess: async (result) => {
-        toast.success("Đăng nhập thành công");
-
-        const token = result.getIdToken().getJwtToken();
-        localStorage.setItem("idToken", token);
-
-        try {
-          const res = await fetch(
-            "https://kaczhbahxc.execute-api.ap-southeast-1.amazonaws.com/dev/me",
-            {
-              method: "GET",
-              headers: { Authorization: `Bearer ${token}` },
-            }
-          );
-
-          if (!res.ok) throw new Error("Không lấy được thông tin người dùng");
-
-          const data = await res.json();
-          if (!data?.userId) throw new Error("Dữ liệu người dùng không hợp lệ");
-
-          set({ user: data });
-          
-          // Set global user ID để useChatStore có thể sử dụng
-          window.__AUTH_USER_ID__ = data.userId;
-
-          // Thực hiện các bước khởi tạo theo thứ tự
-          await get().fetchOnlineUsers();
-          get().startActivePing();
-          get().connectWebSocket();
-          
-        } catch (err) {
-          console.error("Fetch user info failed:", err);
-          toast.error("Không lấy được thông tin người dùng");
-          set({ user: null });
-        }
-
-        set({ isLoggingIn: false });
-      },
-
-      onFailure: (err) => {
-        toast.error(err.message || "Đăng nhập thất bại");
-        console.error("Login error:", err);
-        set({ isLoggingIn: false });
-      },
-    });
-  },
-
   logout: (showToast = true) => {
-    const currentUser = userPool.getCurrentUser();
-    if (currentUser) currentUser.signOut();
+    const currentUser = get().user;
+    console.log("🚪 Logging out user:", currentUser?.userId);
+
+    // Clean disconnect và clear tất cả states
+    get().disconnectWebSocket();
+
+    const cognitoUser = userPool.getCurrentUser();
+    if (cognitoUser) cognitoUser.signOut();
 
     localStorage.removeItem("idToken");
 
     const interval = get().activeInterval;
-    if (interval) clearInterval(interval);
-
-    const ws = get().ws;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.close(1000, "User logout"); // Đóng với code 1000 (normal closure)
+    if (interval) {
+      clearInterval(interval);
     }
 
+    // Reset tất cả states
     set({
       user: null,
       isCheckingAuth: false,
       onlineUsers: [],
       ws: null,
       activeInterval: null,
+      isConnecting: false,
+      connectionAttempts: 0,
     });
 
-    // Clear global user ID
     window.__AUTH_USER_ID__ = null;
 
     if (showToast) toast.success("Đăng xuất thành công");
@@ -456,10 +586,9 @@ socket.onmessage = (event) => {
         if (!res.ok) throw new Error("Lỗi lấy thông tin người dùng");
 
         const data = await res.json();
-        set({ user: data });
-
-        // Set global user ID để useChatStore có thể sử dụng
-        window.__AUTH_USER_ID__ = data.userId;
+        
+        // SỬA: Sử dụng setUser thay vì set trực tiếp
+        get().setUser(data);
 
         // Thực hiện các bước khởi tạo theo thứ tự
         await get().fetchOnlineUsers();
@@ -474,88 +603,67 @@ socket.onmessage = (event) => {
       set({ isCheckingAuth: false });
     });
   },
-  // Thêm các function test này vào useAuthStore
 
-// Test WebSocket connection
-testWebSocket: () => {
-  const { ws } = get();
-  
-  if (!ws || ws.readyState !== WebSocket.OPEN) {
-    console.error(" WebSocket not connected");
-    console.log("🔍 WebSocket state:", {
-      exists: !!ws,
-      readyState: ws?.readyState,
-      readyStateText: ws?.readyState === 0 ? 'CONNECTING' : 
-                     ws?.readyState === 1 ? 'OPEN' : 
-                     ws?.readyState === 2 ? 'CLOSING' : 
-                     ws?.readyState === 3 ? 'CLOSED' : 'UNKNOWN'
-    });
-    return false;
-  }
-  
-  console.log("🧪 Testing WebSocket by sending ping...");
-  
-  // Thử gửi một message test
-  const testMessage = {
-    action: "ping",
-    message: "test from client",
-    timestamp: new Date().toISOString()
-  };
-  
-  try {
-    ws.send(JSON.stringify(testMessage));
-    console.log("🧪 Test message sent:", testMessage);
-    return true;
-  } catch (error) {
-    console.error(" Failed to send test message:", error);
-    return false;
-  }
-},
-
-// Kiểm tra trạng thái kết nối WebSocket
-checkWebSocketStatus: () => {
-  const { ws, user } = get();
-  
-  console.log("🔍 WebSocket Status Check:");
-  console.log("🔍 User logged in:", !!user);
-  console.log("🔍 User ID:", user?.userId);
-  console.log("🔍 WebSocket exists:", !!ws);
-  console.log("🔍 WebSocket ready state:", ws?.readyState);
-  console.log("🔍 WebSocket URL:", ws?.url);
-  console.log("🔍 Token exists:", !!localStorage.getItem("idToken"));
-  
-  if (ws) {
-    const stateNames = {
-      0: 'CONNECTING',
-      1: 'OPEN', 
-      2: 'CLOSING',
-      3: 'CLOSED'
+  // Test functions
+  testWebSocket: () => {
+    const { ws, user } = get();
+    
+    if (!user?.userId) {
+      console.error("❌ No user logged in");
+      return false;
+    }
+    
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      console.error("❌ WebSocket not connected");
+      console.log("🔍 WebSocket state:", get().checkWebSocketStatus());
+      return false;
+    }
+    
+    console.log("🧪 Testing WebSocket for user:", user.userId);
+    
+    const testMessage = {
+      action: "ping",
+      userId: user.userId,
+      timestamp: new Date().toISOString()
     };
-    console.log("🔍 WebSocket state:", stateNames[ws.readyState] || 'UNKNOWN');
-  }
-  
-  return {
-    hasUser: !!user,
-    hasWebSocket: !!ws,
-    isConnected: ws?.readyState === WebSocket.OPEN,
-    hasToken: !!localStorage.getItem("idToken")
-  };
-},
+    
+    try {
+      ws.send(JSON.stringify(testMessage));
+      console.log("🧪 Test message sent:", testMessage);
+      return true;
+    } catch (error) {
+      console.error("❌ Failed to send test message:", error);
+      return false;
+    }
+  },
 
-// Force reconnect WebSocket
-reconnectWebSocket: () => {
-  console.log("🔄 Force reconnecting WebSocket...");
-  
-  const { ws } = get();
-  
-  // Đóng kết nối cũ nếu có
-  if (ws) {
-    ws.close(1000, "Manual reconnect");
+  checkWebSocketStatus: () => {
+    const { ws, user, isConnecting, connectionAttempts } = get();
+    
+    const status = {
+      hasUser: !!user,
+      userId: user?.userId,
+      hasWebSocket: !!ws,
+      isConnected: ws?.readyState === WebSocket.OPEN,
+      isConnecting,
+      connectionAttempts,
+      hasToken: !!localStorage.getItem("idToken"),
+      wsReadyState: ws?.readyState,
+      wsUrl: ws?.url
+    };
+    
+    console.log("🔍 WebSocket Status Check:", status);
+    return status;
+  },
+
+  reconnectWebSocket: () => {
+    console.log("🔄 Force reconnecting WebSocket...");
+    
+    get().disconnectWebSocket();
+    set({ connectionAttempts: 0 });
+    
+    setTimeout(() => {
+      get().connectWebSocket();
+    }, 1000);
   }
-  
-  // Đợi một chút rồi kết nối lại
-  setTimeout(() => {
-    get().connectWebSocket();
-  }, 1000);
-}
 }));

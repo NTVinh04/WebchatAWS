@@ -7,7 +7,7 @@ export const handler = async (event) => {
     const connectionId = event.requestContext.connectionId;
 
     await ddb.send(new DeleteItemCommand({
-      TableName: "WebSocketConnections",
+      TableName: "User",
       Key: { connectionId: { S: connectionId } },
     }));
 

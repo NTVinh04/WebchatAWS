@@ -10,11 +10,23 @@ import { userPool } from "../lib/cognito.js";
 export const useAuthStore = create((set, get) => ({
   user: null,
   isSigningUp: false,
-  isLoggingIng: false,
+  isLoggingIn: false,
   isCheckingAuth: true,
   onlineUsers: [],
+  ws: null,
+  activeInterval: null,
 
-  setOnlineUsers: (users) => set({ onlineUsers: users }),
+  // THÊM function này
+  setUser: (userData) => {
+    set({ user: userData });
+    // Set global user ID để useChatStore có thể sử dụng
+    window.__AUTH_USER_ID__ = userData?.userId;
+  },
+
+  setOnlineUsers: (users) => {
+    console.log("Setting online users:", users);
+    set({ onlineUsers: users });
+  },
 
   // Hàm mới: lấy danh sách user đang online
   fetchOnlineUsers: async () => {
@@ -102,58 +114,6 @@ export const useAuthStore = create((set, get) => ({
 
       toast.success("Đăng ký thành công. Vui lòng xác minh email");
       set({ isSigningUp: false });
-    });
-  },
-
-  login: async ({ email, password }) => {
-    set({ isLoggingIng: true });
-
-    const authDetails = new AuthenticationDetails({
-      Username: email,
-      Password: password,
-    });
-
-    const user = new CognitoUser({
-      Username: email,
-      Pool: userPool,
-    });
-
-    user.authenticateUser(authDetails, {
-      onSuccess: async (result) => {
-        toast.success("Đăng nhập thành công");
-
-        const token = result.getIdToken().getJwtToken();
-        localStorage.setItem("idToken", token);
-
-        try {
-          const res = await fetch("https://kaczhbahxc.execute-api.ap-southeast-1.amazonaws.com/dev/me", {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
-
-          const data = await res.json();
-          if (!res.ok || !data?.userId) throw new Error("Không lấy được thông tin người dùng");
-
-          set({ user: data });
-
-          await get().fetchOnlineUsers();         // Lấy online users sau login
-          get().startActivePing();                // Ping active định kỳ
-        } catch (err) {
-          console.error("Fetch user info failed:", err);
-          toast.error("Không lấy được thông tin người dùng");
-          set({ user: null });
-        }
-
-        set({ isLoggingIng: false });
-      },
-
-      onFailure: (err) => {
-        toast.error("Đăng nhập thất bại");
-        console.error("Login error:", err);
-        set({ isLoggingIng: false });
-      },
     });
   },
 

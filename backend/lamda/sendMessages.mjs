@@ -1,15 +1,15 @@
+// Lambda gửi tin nhắn - Fixed cho single key schema
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { DynamoDBClient, PutItemCommand, QueryCommand } from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient, PutItemCommand } from "@aws-sdk/client-dynamodb";
 import { ApiGatewayManagementApiClient, PostToConnectionCommand } from "@aws-sdk/client-apigatewaymanagementapi";
 
 // Khởi tạo client AWS
 const s3 = new S3Client({ region: "ap-southeast-1" });
 const ddb = new DynamoDBClient({ region: "ap-southeast-1" });
 
-//  THÊM: WebSocket API client
 const apiGateway = new ApiGatewayManagementApiClient({
   region: "ap-southeast-1",
-  endpoint: "https://hiuze9jnyb.execute-api.ap-southeast-1.amazonaws.com/production" // WebSocket endpoint của bạn
+  endpoint: "https://hiuze9jnyb.execute-api.ap-southeast-1.amazonaws.com/production"
 });
 
 export const handler = async (event) => {
@@ -26,7 +26,7 @@ export const handler = async (event) => {
       if (image.startsWith("http")) {
         imageUrl = image;
       } else {
-        // Tự động phát hiện định dạng ảnh
+        // Upload image logic giữ nguyên
         let contentType = "image/jpeg";
         let extension = "jpg";
 
@@ -38,7 +38,6 @@ export const handler = async (event) => {
           extension = "jpg";
         }
 
-        // Loại bỏ prefix data:image/...;base64, nếu có
         const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(base64Data, "base64");
 
@@ -76,7 +75,7 @@ export const handler = async (event) => {
 
     await ddb.send(ddbCommand);
 
-    // 2.  THÊM: Broadcast qua WebSocket
+    // 2. ✅ FIXED: Gửi WebSocket tới receiver với schema mới
     const messageData = {
       conversationId: finalConversationId,
       senderId,
@@ -88,20 +87,20 @@ export const handler = async (event) => {
       createdAt,
     };
 
-    console.log(" Broadcasting message via WebSocket:", messageData);
+    console.log("📡 Sending message via WebSocket to receiver:", receiverId);
     
     try {
-      await broadcastToConversation(finalConversationId, {
+      // ✅ GỬI CHỈ TỚI RECEIVER (không gửi lại cho sender)
+      await sendToUser(receiverId, {
         type: "message",
         payload: messageData
       });
-      console.log(" WebSocket broadcast successful");
+      console.log(`✅ WebSocket sent to receiver: ${receiverId}`);
     } catch (wsError) {
-      console.error(" WebSocket broadcast failed:", wsError);
+      console.error("❌ WebSocket send failed:", wsError);
       // Không throw error để không ảnh hưởng đến việc lưu tin nhắn
     }
 
-    // 3. Trả về response
     return {
       statusCode: 201,
       headers: {
@@ -124,92 +123,99 @@ export const handler = async (event) => {
   }
 };
 
-//  THÊM: Function broadcast qua WebSocket
-async function broadcastToConversation(conversationId, message) {
-  console.log(` Broadcasting to conversation: ${conversationId}`);
-  
-  // Lấy danh sách user IDs từ conversation ID
-  const userIds = conversationId.split('_');
-  console.log(` Users in conversation: ${userIds.join(', ')}`);
-  
-  // Gửi tới tất cả users trong conversation
-  for (const userId of userIds) {
-    await sendToUser(userId, message);
-  }
-}
-
-//  THÊM: Function gửi message tới một user
+// ✅ FIXED: Gửi message tới một user (single connection per user)
 async function sendToUser(userId, message) {
-  console.log(` Sending to user: ${userId}`);
+  console.log(`📡 Sending to user: ${userId}`);
   
   try {
-    // Lấy danh sách connection IDs của user từ DynamoDB
-    const connections = await getUserConnections(userId);
-    console.log(` User ${userId} has ${connections.length} connections`);
+    // ✅ LẤY connection của user từ table User
+    const userConnection = await getUserConnection(userId);
     
-    // Gửi tới tất cả connections của user
-    for (const connectionId of connections) {
-      try {
-        const command = new PostToConnectionCommand({
-          ConnectionId: connectionId,
-          Data: JSON.stringify(message)
-        });
-        
-        await apiGateway.send(command);
-        console.log(` Sent to connection: ${connectionId}`);
-        
-      } catch (error) {
-        console.error(` Failed to send to connection ${connectionId}:`, error);
-        
-        // Nếu connection đã chết (410), xóa khỏi database
-        if (error.statusCode === 410) {
-          await removeConnection(userId, connectionId);
-          console.log(`🗑️ Removed dead connection: ${connectionId}`);
-        }
+    if (!userConnection) {
+      console.log(`⚠️ No connection found for user: ${userId}`);
+      return;
+    }
+
+    console.log(`📡 Found connection for user ${userId}: ${userConnection}`);
+    
+    try {
+      const command = new PostToConnectionCommand({
+        ConnectionId: userConnection,
+        Data: JSON.stringify(message)
+      });
+      
+      await apiGateway.send(command);
+      console.log(`✅ Message sent to user ${userId} via connection: ${userConnection}`);
+      
+    } catch (error) {
+      console.error(`❌ Failed to send to connection ${userConnection}:`, error);
+      
+      // ✅ Nếu connection đã chết (410), xóa khỏi database
+      if (error.statusCode === 410) {
+        await removeDeadConnection(userId);
+        console.log(`🗑️ Removed dead connection for user: ${userId}`);
       }
     }
     
   } catch (error) {
-    console.error(` Error sending to user ${userId}:`, error);
+    console.error(`❌ Error sending to user ${userId}:`, error);
   }
 }
 
-//  THÊM: Function lấy connections của user từ DynamoDB
-async function getUserConnections(userId) {
+// ✅ FIXED: Lấy connection của user (single connection)
+async function getUserConnection(userId) {
   try {
-    const command = new QueryCommand({
-      TableName: "User", // Tên table lưu connections
-      KeyConditionExpression: "userId = :userId",
-      ExpressionAttributeValues: {
-        ":userId": { S: userId }
-      }
-    });
+    // Sử dụng DynamoDB SDK v3
+    const { DynamoDBClient, GetItemCommand } = await import("@aws-sdk/client-dynamodb");
+    const dynamoClient = new DynamoDBClient({ region: "ap-southeast-1" });
     
-    const result = await ddb.send(command);
-    
-    return result.Items?.map(item => item.connectionId.S) || [];
-    
-  } catch (error) {
-    console.error(` Error getting connections for user ${userId}:`, error);
-    return [];
-  }
-}
-
-//  THÊM: Function xóa connection chết
-async function removeConnection(userId, connectionId) {
-  try {
-    const command = new DynamoDBClient.DeleteItemCommand({
+    const command = new GetItemCommand({
       TableName: "User",
       Key: {
-        userId: { S: userId },
-        connectionId: { S: connectionId }
+        userId: { S: userId }
       }
     });
     
-    await ddb.send(command);
+    const result = await dynamoClient.send(command);
+    
+    // Trả về connectionId nếu có và user đang online
+    if (result.Item && result.Item.connectionId && result.Item.status?.S === "online") {
+      return result.Item.connectionId.S;
+    }
+    
+    return null;
     
   } catch (error) {
-    console.error(` Error removing connection:`, error);
+    console.error(`❌ Error getting connection for user ${userId}:`, error);
+    return null;
+  }
+}
+
+// ✅ FIXED: Xóa connection chết
+async function removeDeadConnection(userId) {
+  try {
+    const { DynamoDBClient, UpdateItemCommand } = await import("@aws-sdk/client-dynamodb");
+    const dynamoClient = new DynamoDBClient({ region: "ap-southeast-1" });
+    
+    const command = new UpdateItemCommand({
+      TableName: "User",
+      Key: {
+        userId: { S: userId }
+      },
+      UpdateExpression: "REMOVE connectionId SET #st = :offline",
+      ExpressionAttributeNames: {
+        "#st": "status"
+      },
+      ExpressionAttributeValues: {
+        ":offline": { S: "offline" }
+      }
+    });
+    
+    await dynamoClient.send(command);
+    console.log(`🗑️ Cleared dead connection for user: ${userId}`);
+    
+  } catch (error) {
+    console.error(`❌ Error clearing dead connection for user ${userId}:`, error);
   }
 }
 

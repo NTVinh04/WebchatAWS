@@ -23,7 +23,8 @@ const App = () => {
     checkAuth();
   }, [checkAuth]);
 
-  // Hiển thị loading trong khi checkAuth đang chạy
+  // Hiển thị loading trong khi checkAuth đang chạy 
+  // nếu cầu kiểm tra token thì dán {user && <TokenFetcher />} vào phía trên Toaster
   if (isCheckingAuth) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -44,8 +45,6 @@ const App = () => {
         <Route path="/profile" element={user ? <ProfilePage /> : <Navigate to="/login" />} />
         <Route path="/confirm-signup" element={<ConfirmSignUpPage />} />
       </Routes>
-
-      {user && <TokenFetcher />}
       <Toaster />
     </div>
   );

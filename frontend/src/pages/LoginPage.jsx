@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { loginCognito } from "../lib/cognito"; // Giả sử đây là hàm login
-import { api } from "../lib/axios"; // Axios đã cấu hình
-import {avatarS3} from "../constants/avatars3"; // giả sử có ảnh mặc định
+import { loginCognito } from "../lib/cognito";
+import { api } from "../lib/axios";
+import {avatarS3} from "../constants/avatars3";
 import { Eye, EyeOff, Loader2, Lock, Mail } from 'lucide-react';
 import AuthImagePattern from "../components/AuthImagePattern";
 import { useAuthStore } from "../store/useAuthStore";
@@ -13,8 +13,7 @@ const LoginPage = () => {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [formData, setFormData] = useState({ email: "", password: "" });
   const navigate = useNavigate();
-  const setUser = useAuthStore((state) => state.setUser);
-  const checkAuth = useAuthStore((state) => state.checkAuth);
+  const { setUser, fetchOnlineUsers, startActivePing, connectWebSocket } = useAuthStore();
 
 const handleSubmit = async (e) => {
   e.preventDefault();
@@ -31,11 +30,16 @@ const handleSubmit = async (e) => {
     let isUserCreatedOrExists = false;
 
     try {
-      await api.get("/me", {
+      // Thử lấy thông tin user
+      const userResponse = await api.get("/me", {
         headers: { Authorization: `Bearer ${idToken}` },
       });
       console.log("User đã tồn tại trong DynamoDB");
+      
+      // Set user vào store
+      setUser(userResponse.data);
       isUserCreatedOrExists = true;
+      
     } catch (err) {
       const status = err.response?.status;
       const message = err.response?.data?.message?.toLowerCase() || "";
@@ -46,7 +50,7 @@ const handleSubmit = async (e) => {
 
       if (status === 404 || status === 500) {
         try {
-          await api.post(
+          const createResponse = await api.post(
             "/create-user",
             {
               fullName,
@@ -57,7 +61,11 @@ const handleSubmit = async (e) => {
             }
           );
           console.log("Đã tạo user mới trong DynamoDB");
+          
+          // Set user mới tạo vào store
+          setUser(createResponse.data);
           isUserCreatedOrExists = true;
+          
         } catch (createErr) {
           toast.error("Không thể tạo người dùng mới", { duration: 7000 });
           console.error("Lỗi khi tạo user:", createErr);
@@ -71,7 +79,15 @@ const handleSubmit = async (e) => {
     }
 
     if (isUserCreatedOrExists) {
-      await checkAuth(); // Cập nhật lại user chính xác trong store
+      // Set global user ID để useChatStore có thể sử dụng
+      const userData = useAuthStore.getState().user;
+      window.__AUTH_USER_ID__ = userData?.userId;
+
+      // Thực hiện các bước khởi tạo theo thứ tự
+      await fetchOnlineUsers();
+      startActivePing();
+      connectWebSocket();
+      
       toast.success("Đăng nhập thành công!", { duration: 3000 });
       navigate("/");
     }
