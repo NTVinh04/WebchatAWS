@@ -1,5 +1,12 @@
 Đổi url cho các file sau
 
+websocket: 5gm2fis56a.execute-api.ap-southeast-1.amazonaws.com
+RestAPI: pf86nve7i8.execute-api.ap-southeast-1.amazonaws.com
+Table: User
+       Messages
+S3 bucket: chatapp-pic
+           chatapp-web
+
 corsS3.json: 
             "AllowedOrigins": ["http://chatapp-web.s3-website-ap-southeast-1.amazonaws.com"],
 
