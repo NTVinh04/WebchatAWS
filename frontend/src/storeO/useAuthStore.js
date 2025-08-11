@@ -34,7 +34,7 @@ export const useAuthStore = create((set, get) => ({
     if (!idToken) return;
 
     try {
-      const res = await fetch("https://kaczhbahxc.execute-api.ap-southeast-1.amazonaws.com/dev/user", {
+      const res = await fetch("https://pf86nve7i8.execute-api.ap-southeast-1.amazonaws.com/dev/user", {
         headers: {
           Authorization: `Bearer ${idToken}`,
         },
@@ -59,7 +59,7 @@ export const useAuthStore = create((set, get) => ({
     if (!idToken) return;
 
     const ping = () => {
-      fetch("https://kaczhbahxc.execute-api.ap-southeast-1.amazonaws.com/dev/active", {
+      fetch("https://pf86nve7i8.execute-api.ap-southeast-1.amazonaws.com/dev/active", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${idToken}`,
@@ -82,7 +82,7 @@ export const useAuthStore = create((set, get) => ({
     }
 
     try {
-      const res = await fetch("https://kaczhbahxc.execute-api.ap-southeast-1.amazonaws.com/dev/me", {
+      const res = await fetch("https://pf86nve7i8.execute-api.ap-southeast-1.amazonaws.com/dev/me", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -159,7 +159,7 @@ export const useAuthStore = create((set, get) => ({
           const token = session.getIdToken().getJwtToken();
           localStorage.setItem("idToken", token);
 
-          const res = await fetch("https://kaczhbahxc.execute-api.ap-southeast-1.amazonaws.com/dev/me", {
+          const res = await fetch("https://pf86nve7i8.execute-api.ap-southeast-1.amazonaws.com/dev/me", {
             method: "GET",
             headers: {
               Authorization: `Bearer ${token}`,

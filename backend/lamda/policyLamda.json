@@ -21,8 +21,7 @@
             ],
             "Resource": [
                 "arn:aws:dynamodb:ap-southeast-1:460299231454:table/User",
-                "arn:aws:dynamodb:ap-southeast-1:460299231454:table/Messages",
-                "arn:aws:dynamodb:ap-southeast-1:460299231454:table/Conversations"
+                "arn:aws:dynamodb:ap-southeast-1:460299231454:table/Messages"
             ]
         },
         {

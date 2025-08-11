@@ -6,7 +6,7 @@ import { useAuthStore } from "../store/useAuthStore";
 let hasShownTokenExpiredToast = false;
 
 export const api = axios.create({
-  baseURL: "https://kaczhbahxc.execute-api.ap-southeast-1.amazonaws.com/dev",
+  baseURL: "https://pf86nve7i8.execute-api.ap-southeast-1.amazonaws.com/dev",
 });
 
 // Request interceptor – gắn token nếu có

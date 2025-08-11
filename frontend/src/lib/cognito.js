@@ -5,8 +5,8 @@ import {
 } from 'amazon-cognito-identity-js';
 
 const poolData = {
-  UserPoolId: 'ap-southeast-1_Bkf9j9RkN', // ← từ AWS Cognito
-  ClientId: '3sngabanesabv228v3vlb98dr9', // ← từ App client
+  UserPoolId: 'ap-southeast-1_vWQ1lJ2Co', // ← từ AWS Cognito
+  ClientId: 'q617sf9trg634sf8b6vj2b1vu', // ← từ App client
 };
 
 export const userPool = new CognitoUserPool(poolData);

@@ -70,13 +70,13 @@ export const useChatStore = create((set, get) => ({
 
   // Gửi tin nhắn
   sendMessage: async (messageData) => {
-    console.log("📤 sendMessage called with:", messageData);
+    console.log(" sendMessage called with:", messageData);
     
     const { messages, selectedUser, getConversationId } = get();
     const senderId = window.__AUTH_USER_ID__ || null;
     const receiverId = selectedUser?.userId;
 
-    console.log("📤 Send message details:", {
+    console.log(" Send message details:", {
       senderId,
       receiverId,
       selectedUser: selectedUser?.email || selectedUser?.userId,
@@ -90,7 +90,7 @@ export const useChatStore = create((set, get) => ({
     }
 
     const conversationId = getConversationId();
-    console.log("📤 Conversation ID:", conversationId);
+    console.log(" Conversation ID:", conversationId);
 
     const payload = {
       ...messageData,
@@ -99,10 +99,10 @@ export const useChatStore = create((set, get) => ({
       conversationId,
     };
 
-    console.log("📤 Full payload being sent:", payload);
+    console.log(" Full payload being sent:", payload);
 
     try {
-      console.log("📤 Sending POST request to /send-message...");
+      console.log(" Sending POST request to /send-message...");
       
       const res = await axiosInstance.post(`/send-message`, payload);
       
@@ -131,15 +131,15 @@ export const useChatStore = create((set, get) => ({
 
   //  FIXED: Enhanced addMessage with proper debug and conversation check
   addMessage: (newMessage) => {
-    console.log("💬 ===== ADD MESSAGE DEBUG =====");
-    console.log("💬 Called with:", newMessage);
-    console.log("💬 Message type:", typeof newMessage);
-    console.log("💬 Message keys:", Object.keys(newMessage || {}));
+    console.log(" ===== ADD MESSAGE DEBUG =====");
+    console.log(" Called with:", newMessage);
+    console.log(" Message type:", typeof newMessage);
+    console.log(" Message keys:", Object.keys(newMessage || {}));
     
     const { messages, selectedUser } = get();
     const currentUserId = window.__AUTH_USER_ID__;
     
-    console.log("💬 Current state:", {
+    console.log(" Current state:", {
       messagesCount: messages.length,
       selectedUser: selectedUser?.userId,
       currentUserId: currentUserId
@@ -154,7 +154,7 @@ export const useChatStore = create((set, get) => ({
     const conversationId = get().getConversationId();
     const messageConversationId = newMessage.conversationId;
     
-    console.log("💬 Conversation check:", {
+    console.log(" Conversation check:", {
       currentConversationId: conversationId,
       messageConversationId: messageConversationId,
       isMatch: conversationId === messageConversationId
@@ -162,7 +162,7 @@ export const useChatStore = create((set, get) => ({
 
     // Nếu không phải conversation hiện tại thì bỏ qua
     if (conversationId !== messageConversationId) {
-      console.log("💬 Message not for current conversation, ignoring");
+      console.log(" Message not for current conversation, ignoring");
       return;
     }
 
@@ -173,13 +173,13 @@ export const useChatStore = create((set, get) => ({
       msg.text === newMessage.text
     );
 
-    console.log("💬 Duplicate check:", {
+    console.log(" Duplicate check:", {
       isDuplicate: isDuplicate,
       existingMessagesCount: messages.length
     });
 
     if (isDuplicate) {
-      console.log("💬 Duplicate message detected, skipping");
+      console.log(" Duplicate message detected, skipping");
       return;
     }
 
@@ -189,18 +189,18 @@ export const useChatStore = create((set, get) => ({
       type: newMessage.attachment ? "image" : "text",
     };
 
-    console.log("💬 Formatted message:", formattedMessage);
+    console.log(" Formatted message:", formattedMessage);
     
     const updatedMessages = [...messages, formattedMessage];
-    console.log("💬 Updating messages array:", {
+    console.log(" Updating messages array:", {
       oldCount: messages.length,
       newCount: updatedMessages.length
     });
     
     set({ messages: updatedMessages });
     
-    console.log("💬 Messages updated successfully");
-    console.log("💬 ===== END ADD MESSAGE DEBUG =====");
+    console.log(" Messages updated successfully");
+    console.log(" ===== END ADD MESSAGE DEBUG =====");
   },
 
   setSelectedUser: (selectedUser) => {

@@ -14,9 +14,9 @@ export const useAuthStore = create((set, get) => ({
   connectionAttempts: 0,
   maxConnectionAttempts: 3,
 
-  // ✅ Helper function để set user từ bên ngoài
+  //  Helper function để set user từ bên ngoài
   setUser: (userData) => {
-    console.log("✅ Setting user:", userData?.userId);
+    console.log(" Setting user:", userData?.userId);
     set({ user: userData });
     
     if (userData?.userId) {
@@ -29,16 +29,16 @@ export const useAuthStore = create((set, get) => ({
     set({ onlineUsers: users });
   },
 
-  // ✅ Function để khởi tạo tất cả services sau khi login
+  //  Function để khởi tạo tất cả services sau khi login
   initializeUserServices: async () => {
     const { user } = get();
     
     if (!user?.userId) {
-      console.warn("❌ No user found, cannot initialize services");
+      console.warn(" No user found, cannot initialize services");
       return;
     }
 
-    console.log("🚀 Initializing services for user:", user.userId);
+    console.log(" Initializing services for user:", user.userId);
     
     // Clean any existing connections first
     get().disconnectWebSocket();
@@ -59,32 +59,32 @@ export const useAuthStore = create((set, get) => ({
     });
     
     try {
-      console.log("📡 Step 1: Fetching online users...");
+      console.log(" Step 1: Fetching online users...");
       await get().fetchOnlineUsers();
       
-      console.log("🏓 Step 2: Starting active ping...");
+      console.log(" Step 2: Starting active ping...");
       get().startActivePing();
       
       // Wait a bit for ping to establish presence
       await new Promise(resolve => setTimeout(resolve, 200));
       
-      console.log("🔌 Step 3: Connecting WebSocket...");
+      console.log(" Step 3: Connecting WebSocket...");
       get().connectWebSocket();
       
-      console.log("✅ All services initialized successfully for user:", user.userId);
+      console.log(" All services initialized successfully for user:", user.userId);
       
-      // ✅ VERIFICATION: Check connection after a delay
+      //  VERIFICATION: Check connection after a delay
       setTimeout(() => {
         const status = get().checkWebSocketStatus();
         if (status.isConnected) {
-          console.log("✅ WebSocket connection verified successfully");
+          console.log(" WebSocket connection verified successfully");
         } else {
-          console.warn("⚠️ WebSocket connection verification failed, status:", status);
+          console.warn(" WebSocket connection verification failed, status:", status);
         }
       }, 1000);
       
     } catch (err) {
-      console.error("❌ Error initializing services:", err);
+      console.error(" Error initializing services:", err);
       throw err;
     }
   },
@@ -94,23 +94,23 @@ export const useAuthStore = create((set, get) => ({
     const { ws, user, isConnecting, connectionAttempts, maxConnectionAttempts } = get();
 
     if (!user?.userId) {
-      console.warn("❌ No user or userId found, cannot connect WebSocket");
+      console.warn(" No user or userId found, cannot connect WebSocket");
       return;
     }
 
     if (isConnecting) {
-      console.log("🔄 Connection already in progress, skipping...");
+      console.log(" Connection already in progress, skipping...");
       return;
     }
 
     if (connectionAttempts >= maxConnectionAttempts) {
-      console.error("❌ Max connection attempts reached, stopping reconnect");
+      console.error(" Max connection attempts reached, stopping reconnect");
       return;
     }
 
     // Clean up existing connection first
     if (ws) {
-      console.log("🧹 Cleaning up existing WebSocket connection");
+      console.log(" Cleaning up existing WebSocket connection");
       try {
         ws.close(1000, "New connection starting");
       } catch (err) {
@@ -121,7 +121,7 @@ export const useAuthStore = create((set, get) => ({
 
     const idToken = localStorage.getItem("idToken");
     if (!idToken) {
-      console.error("❌ No token found, cannot connect WebSocket");
+      console.error(" No token found, cannot connect WebSocket");
       return;
     }
 
@@ -134,31 +134,31 @@ export const useAuthStore = create((set, get) => ({
       
       const payload = JSON.parse(atob(tokenParts[1]));
       if (!payload.sub || payload.sub !== user.userId) {
-        console.error("❌ Token userId mismatch:", { tokenSub: payload.sub, currentUser: user.userId });
+        console.error(" Token userId mismatch:", { tokenSub: payload.sub, currentUser: user.userId });
         get().logout(false);
         return;
       }
       
       const now = Math.floor(Date.now() / 1000);
       if (payload.exp && payload.exp < now) {
-        console.error("❌ Token expired");
+        console.error(" Token expired");
         get().logout(false);
         return;
       }
       
     } catch (err) {
-      console.error("❌ Token validation failed:", err);
+      console.error(" Token validation failed:", err);
       get().logout(false);
       return;
     }
 
     set({ isConnecting: true, connectionAttempts: connectionAttempts + 1 });
 
-    console.log(`🔗 Connecting WebSocket for user: ${user.userId} (attempt ${connectionAttempts + 1})`);
+    console.log(` Connecting WebSocket for user: ${user.userId} (attempt ${connectionAttempts + 1})`);
 
-    // ✅ FIXED: URL khớp với backend $connect handler
-    const wsUrl = `wss://hiuze9jnyb.execute-api.ap-southeast-1.amazonaws.com/production?token=${encodeURIComponent(idToken)}`;
-    console.log("🔗 WebSocket URL (token masked):", wsUrl.replace(idToken, '[TOKEN]'));
+    //  FIXED: URL khớp với backend $connect handler
+    const wsUrl = `wss://5gm2fis56a.execute-api.ap-southeast-1.amazonaws.com/production?token=${encodeURIComponent(idToken)}`;
+    console.log(" WebSocket URL (token masked):", wsUrl.replace(idToken, '[TOKEN]'));
     
     const socket = new WebSocket(wsUrl);
     const connectionUserId = user.userId;
@@ -166,7 +166,7 @@ export const useAuthStore = create((set, get) => ({
     // Connection timeout
     const connectionTimeout = setTimeout(() => {
       if (socket.readyState === WebSocket.CONNECTING) {
-        console.error("❌ WebSocket connection timeout");
+        console.error(" WebSocket connection timeout");
         socket.close();
         set({ isConnecting: false });
       }
@@ -177,12 +177,12 @@ export const useAuthStore = create((set, get) => ({
       
       const currentUser = get().user;
       if (!currentUser || currentUser.userId !== connectionUserId) {
-        console.warn("⚠️ User changed during connection, closing socket");
+        console.warn(" User changed during connection, closing socket");
         socket.close(1000, "User changed");
         return;
       }
 
-      console.log("✅ WebSocket connected successfully for user:", connectionUserId);
+      console.log(" WebSocket connected successfully for user:", connectionUserId);
       
       set({ 
         ws: socket, 
@@ -200,9 +200,9 @@ export const useAuthStore = create((set, get) => ({
       
       try {
         socket.send(JSON.stringify(identifyMessage));
-        console.log("🆔 Identification sent:", identifyMessage);
+        console.log(" Identification sent:", identifyMessage);
       } catch (err) {
-        console.error("❌ Failed to send identification:", err);
+        console.error(" Failed to send identification:", err);
       }
     };
 
@@ -210,52 +210,52 @@ export const useAuthStore = create((set, get) => ({
       const currentUser = get().user;
       
       if (!currentUser || currentUser.userId !== connectionUserId) {
-        console.warn("🚫 Received message but user changed, ignoring");
+        console.warn(" Received message but user changed, ignoring");
         return;
       }
 
-      console.log("📨 WebSocket message received for user:", currentUser.userId);
+      console.log(" WebSocket message received for user:", currentUser.userId);
       
       try {
         const data = JSON.parse(event.data);
-        console.log("🔍 Parsed data:", JSON.stringify(data, null, 2));
+        console.log(" Parsed data:", JSON.stringify(data, null, 2));
 
         if (!data.type) {
-          console.warn("⚠️ Message missing type field");
+          console.warn(" Message missing type field");
           return;
         }
 
         switch (data.type) {
           case "message":
             if (!data.payload || !data.payload.receiverId) {
-              console.warn("⚠️ Invalid message payload");
+              console.warn(" Invalid message payload");
               break;
             }
             
             if (data.payload.receiverId !== currentUser.userId) {
-              console.log("🚫 Message not for current user, ignoring");
+              console.log(" Message not for current user, ignoring");
               break;
             }
             
             if (window.__chatStore) {
               const chatState = window.__chatStore.getState();
               chatState.addMessage(data.payload);
-              console.log("💬 Message added to chat store");
+              console.log(" Message added to chat store");
             } else {
-              console.error("❌ Chat store not available");
+              console.error(" Chat store not available");
             }
             break;
             
           case "user_status":
             if (!data.payload || !data.payload.userId) {
-              console.warn("⚠️ Invalid user status payload");
+              console.warn(" Invalid user status payload");
               break;
             }
             
             const { userId, status } = data.payload;
             
             if (userId === currentUser.userId) {
-              console.log("🚫 Ignoring status update for self");
+              console.log(" Ignoring status update for self");
               break;
             }
             
@@ -263,56 +263,56 @@ export const useAuthStore = create((set, get) => ({
             
             if (status === "online" && !currentOnlineUsers.includes(userId)) {
               set({ onlineUsers: [...currentOnlineUsers, userId] });
-              console.log("👥 User came online:", userId);
+              console.log(" User came online:", userId);
             } else if (status === "offline") {
               set({ onlineUsers: currentOnlineUsers.filter(id => id !== userId) });
-              console.log("👥 User went offline:", userId);
+              console.log(" User went offline:", userId);
             }
             break;
             
           case "online_users":
             if (!Array.isArray(data.payload)) {
-              console.warn("⚠️ Invalid online users payload");
+              console.warn(" Invalid online users payload");
               break;
             }
             
             const filteredUsers = data.payload.filter(userId => 
               userId !== currentUser.userId
             );
-            console.log("👥 Setting online users (excluding self):", filteredUsers);
+            console.log(" Setting online users (excluding self):", filteredUsers);
             set({ onlineUsers: filteredUsers });
             break;
             
           case "pong":
-            console.log("🏓 Received pong");
+            console.log(" Received pong");
             break;
 
           case "error":
-            console.error("❌ Received error:", data.payload);
+            console.error(" Received error:", data.payload);
             if (data.payload?.code === 'USER_MISMATCH') {
-              console.error("❌ Critical: User mismatch detected, logging out");
+              console.error(" Critical: User mismatch detected, logging out");
               get().logout(false);
             }
             break;
             
           default:
-            console.warn("⚠️ Unknown message type:", data.type);
+            console.warn(" Unknown message type:", data.type);
         }
         
       } catch (err) {
-        console.error("❌ Message parse error:", err.message);
+        console.error(" Message parse error:", err.message);
       }
     };
 
     socket.onerror = (err) => {
       clearTimeout(connectionTimeout);
-      console.error("❌ WebSocket error:", err);
+      console.error(" WebSocket error:", err);
       set({ isConnecting: false });
     };
 
     socket.onclose = (event) => {
       clearTimeout(connectionTimeout);
-      console.log("🔌 WebSocket closed:", event.code, event.reason);
+      console.log(" WebSocket closed:", event.code, event.reason);
       
       const currentWs = get().ws;
       if (currentWs === socket) {
@@ -332,7 +332,7 @@ export const useAuthStore = create((set, get) => ({
         
         if (currentUser && currentUser.userId === connectionUserId && attempts < maxConnectionAttempts) {
           const delay = Math.min(1000 * Math.pow(2, attempts), 10000);
-          console.log(`🔄 Reconnecting in ${delay}ms... (attempt ${attempts + 1}/${maxConnectionAttempts})`);
+          console.log(` Reconnecting in ${delay}ms... (attempt ${attempts + 1}/${maxConnectionAttempts})`);
           
           setTimeout(() => {
             const stillCurrentUser = get().user;
@@ -341,20 +341,20 @@ export const useAuthStore = create((set, get) => ({
             }
           }, delay);
         } else {
-          console.log("🚫 Max reconnection attempts reached or user changed");
+          console.log(" Max reconnection attempts reached or user changed");
           set({ connectionAttempts: 0 });
         }
       }
     };
 
-    console.log("🔗 WebSocket connection initiated for user:", connectionUserId);
+    console.log(" WebSocket connection initiated for user:", connectionUserId);
   },
 
   disconnectWebSocket: () => {
     const { ws } = get();
     const currentUser = get().user;
     
-    console.log("🔌 Disconnecting WebSocket for user:", currentUser?.userId);
+    console.log(" Disconnecting WebSocket for user:", currentUser?.userId);
     
     set({ 
       isConnecting: false, 
@@ -386,7 +386,7 @@ export const useAuthStore = create((set, get) => ({
     try {
       console.log("Fetching online users for user:", currentUser.userId);
       const res = await fetch(
-        "https://kaczhbahxc.execute-api.ap-southeast-1.amazonaws.com/dev/user",
+        "https://pf86nve7i8.execute-api.ap-southeast-1.amazonaws.com/dev/user",
         {
           headers: { Authorization: `Bearer ${idToken}` },
         }
@@ -400,7 +400,7 @@ export const useAuthStore = create((set, get) => ({
       
       const stillCurrentUser = get().user;
       if (!stillCurrentUser || stillCurrentUser.userId !== currentUser.userId) {
-        console.log("🚫 User changed during fetch, ignoring results");
+        console.log(" User changed during fetch, ignoring results");
         return;
       }
       
@@ -446,7 +446,7 @@ export const useAuthStore = create((set, get) => ({
 
       try {
         const res = await fetch(
-          "https://kaczhbahxc.execute-api.ap-southeast-1.amazonaws.com/dev/active",
+          "https://pf86nve7i8.execute-api.ap-southeast-1.amazonaws.com/dev/active",
           {
             method: "POST",
             headers: { Authorization: `Bearer ${idToken}` },
@@ -478,7 +478,7 @@ export const useAuthStore = create((set, get) => ({
 
     try {
       const res = await fetch(
-        "https://kaczhbahxc.execute-api.ap-southeast-1.amazonaws.com/dev/me",
+        "https://pf86nve7i8.execute-api.ap-southeast-1.amazonaws.com/dev/me",
         {
           method: "PUT",
           headers: {
@@ -517,7 +517,7 @@ export const useAuthStore = create((set, get) => ({
 
   logout: (showToast = true) => {
     const currentUser = get().user;
-    console.log("🚪 Logging out user:", currentUser?.userId);
+    console.log(" Logging out user:", currentUser?.userId);
 
     // Clean disconnect và clear tất cả states
     get().disconnectWebSocket();
@@ -576,7 +576,7 @@ export const useAuthStore = create((set, get) => ({
         localStorage.setItem("idToken", token);
 
         const res = await fetch(
-          "https://kaczhbahxc.execute-api.ap-southeast-1.amazonaws.com/dev/me",
+          "https://pf86nve7i8.execute-api.ap-southeast-1.amazonaws.com/dev/me",
           {
             method: "GET",
             headers: { Authorization: `Bearer ${token}` },
@@ -609,17 +609,17 @@ export const useAuthStore = create((set, get) => ({
     const { ws, user } = get();
     
     if (!user?.userId) {
-      console.error("❌ No user logged in");
+      console.error(" No user logged in");
       return false;
     }
     
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      console.error("❌ WebSocket not connected");
-      console.log("🔍 WebSocket state:", get().checkWebSocketStatus());
+      console.error(" WebSocket not connected");
+      console.log(" WebSocket state:", get().checkWebSocketStatus());
       return false;
     }
     
-    console.log("🧪 Testing WebSocket for user:", user.userId);
+    console.log(" Testing WebSocket for user:", user.userId);
     
     const testMessage = {
       action: "ping",
@@ -629,10 +629,10 @@ export const useAuthStore = create((set, get) => ({
     
     try {
       ws.send(JSON.stringify(testMessage));
-      console.log("🧪 Test message sent:", testMessage);
+      console.log(" Test message sent:", testMessage);
       return true;
     } catch (error) {
-      console.error("❌ Failed to send test message:", error);
+      console.error(" Failed to send test message:", error);
       return false;
     }
   },
@@ -652,12 +652,12 @@ export const useAuthStore = create((set, get) => ({
       wsUrl: ws?.url
     };
     
-    console.log("🔍 WebSocket Status Check:", status);
+    console.log(" WebSocket Status Check:", status);
     return status;
   },
 
   reconnectWebSocket: () => {
-    console.log("🔄 Force reconnecting WebSocket...");
+    console.log(" Force reconnecting WebSocket...");
     
     get().disconnectWebSocket();
     set({ connectionAttempts: 0 });
