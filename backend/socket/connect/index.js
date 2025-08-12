@@ -8,7 +8,7 @@ const dynamo = new AWS.DynamoDB.DocumentClient();
 
 const USERS_TABLE = process.env.USERS_TABLE || "User";
 const REGION = process.env.AWS_REGION || "ap-southeast-1";
-const USER_POOL_ID = "ap-southeast-1_vWQ1lJ2Co"; // gán trực tiếp
+const USER_POOL_ID = "ap-southeast-1_VhB6CgGuj"; // gán trực tiếp
 
 let pemsCache = null;
 

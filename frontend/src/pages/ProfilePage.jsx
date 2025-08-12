@@ -40,7 +40,7 @@ const handleConfirmImage = async () => {
 
   try {
     // B1: Lấy pre-signed URL từ backend
-    const res = await fetch('https://pf86nve7i8.execute-api.ap-southeast-1.amazonaws.com/dev/me/avatar', {
+    const res = await fetch('https://92ll2qcxai.execute-api.ap-southeast-1.amazonaws.com/dev/me/avatar', {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -62,7 +62,7 @@ const handleConfirmImage = async () => {
     });
 
     // B3: Cập nhật ảnh đại diện (tùy backend bạn có cần gọi không)
-    await fetch("https://pf86nve7i8.execute-api.ap-southeast-1.amazonaws.com/dev/me", {
+    await fetch("https://92ll2qcxai.execute-api.ap-southeast-1.amazonaws.com/dev/me", {
      method: "PUT",
      headers: {
        Authorization: `Bearer ${token}`,

@@ -9,7 +9,7 @@ const ddb = new DynamoDBClient({ region: "ap-southeast-1" });
 
 const apiGateway = new ApiGatewayManagementApiClient({
   region: "ap-southeast-1",
-  endpoint: 'https://5gm2fis56a.execute-api.ap-southeast-1.amazonaws.com/production'
+  endpoint: 'https://n5rwnf1sm9.execute-api.ap-southeast-1.amazonaws.com/production'
 });
 
 export const handler = async (event) => {

@@ -157,7 +157,7 @@ export const useAuthStore = create((set, get) => ({
     console.log(` Connecting WebSocket for user: ${user.userId} (attempt ${connectionAttempts + 1})`);
 
     //  FIXED: URL khớp với backend $connect handler
-    const wsUrl = `wss://5gm2fis56a.execute-api.ap-southeast-1.amazonaws.com/production?token=${encodeURIComponent(idToken)}`;
+    const wsUrl = `wss://n5rwnf1sm9.execute-api.ap-southeast-1.amazonaws.com/production?token=${encodeURIComponent(idToken)}`;
     console.log(" WebSocket URL (token masked):", wsUrl.replace(idToken, '[TOKEN]'));
     
     const socket = new WebSocket(wsUrl);
@@ -386,7 +386,7 @@ export const useAuthStore = create((set, get) => ({
     try {
       console.log("Fetching online users for user:", currentUser.userId);
       const res = await fetch(
-        "https://pf86nve7i8.execute-api.ap-southeast-1.amazonaws.com/dev/user",
+        "https://92ll2qcxai.execute-api.ap-southeast-1.amazonaws.com/dev/user",
         {
           headers: { Authorization: `Bearer ${idToken}` },
         }
@@ -446,7 +446,7 @@ export const useAuthStore = create((set, get) => ({
 
       try {
         const res = await fetch(
-          "https://pf86nve7i8.execute-api.ap-southeast-1.amazonaws.com/dev/active",
+          "https://92ll2qcxai.execute-api.ap-southeast-1.amazonaws.com/dev/active",
           {
             method: "POST",
             headers: { Authorization: `Bearer ${idToken}` },
@@ -478,7 +478,7 @@ export const useAuthStore = create((set, get) => ({
 
     try {
       const res = await fetch(
-        "https://pf86nve7i8.execute-api.ap-southeast-1.amazonaws.com/dev/me",
+        "https://92ll2qcxai.execute-api.ap-southeast-1.amazonaws.com/dev/me",
         {
           method: "PUT",
           headers: {
@@ -576,7 +576,7 @@ export const useAuthStore = create((set, get) => ({
         localStorage.setItem("idToken", token);
 
         const res = await fetch(
-          "https://pf86nve7i8.execute-api.ap-southeast-1.amazonaws.com/dev/me",
+          "https://92ll2qcxai.execute-api.ap-southeast-1.amazonaws.com/dev/me",
           {
             method: "GET",
             headers: { Authorization: `Bearer ${token}` },
