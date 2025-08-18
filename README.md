@@ -2,7 +2,7 @@ Link Test:
 
 (S3)  http://chatapp-web.s3-website-ap-southeast-1.amazonaws.com/
 
-(CloudFront)  d1comvci1i8tqc.cloudfront.net
+(CloudFront)  https://d1comvci1i8tqc.cloudfront.net/
 
 Đổi url cho các file sau
 
