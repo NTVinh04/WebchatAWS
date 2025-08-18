@@ -1,6 +1,7 @@
 Link Test:
 
-http://chatapp-web.s3-website-ap-southeast-1.amazonaws.com/
+(S3)  http://chatapp-web.s3-website-ap-southeast-1.amazonaws.com/
+(CloudFront)  d1comvci1i8tqc.cloudfront.net
 
 Đổi url cho các file sau
 
